@@ -1,0 +1,113 @@
+/* Reset */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  body {
+    font-family: 'Segoe UI', sans-serif;
+    background-color: #0a0a0a;
+    color: #ffffff;
+    min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
+  }
+  
+  /* Navbar */
+  .navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 60px;
+    position: relative;
+    z-index: 2;
+  }
+  
+  .navbar a {
+    color: #ccc;
+    margin: 0 10px;
+    text-decoration: none;
+    font-size: 16px;
+    transition: color 0.2s ease;
+  }
+  
+  .navbar a:hover {
+    color: #fff;
+  }
+  
+  .login-btn {
+    background: none;
+    border: 1px solid #888;
+    color: #fff;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-left: 10px;
+    transition: background 0.3s ease;
+  }
+  
+  .login-btn:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  /* Hero Section */
+  .hero {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 120px 20px;
+    text-align: center;
+    z-index: 2;
+    position: relative;
+  }
+  
+  .hero-content h1 {
+    font-size: 48px;
+    margin-bottom: 20px;
+    background: linear-gradient(to right, #646363, #eef1f1);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  
+  .hero-content p {
+    font-size: 20px;
+    color: #ccc;
+    margin-bottom: 30px;
+  }
+  
+  .cta-btn {
+    background: linear-gradient(to right, #111111, #626464);
+    border: none;
+    color: #fff;
+    padding: 12px 28px;
+    font-size: 16px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+  }
+  
+  .cta-btn:hover {
+    transform: scale(1.05);
+  }
+  
+  /* 漸層光暈 */
+  .glow {
+    position: absolute;
+    top: 0;
+    width: 200px;
+    height: 100vh;
+    filter: blur(80px);
+    z-index: 0;
+  }
+  
+  .left-glow {
+    left: -120px;
+    background: radial-gradient(circle, rgba(252, 252, 252, 0.3), transparent);
+  }
+  
+  .right-glow {
+    right: -120px;
+    background: radial-gradient(circle, rgba(247, 248, 248, 0.3), transparent);
+  }
+  
