@@ -12,11 +12,11 @@
   <!-- all -->
   <div class="wrapper">
 
-  <!-- 漸層光暈 -->
+  <!-- glow -->
   <div class="glow left-glow"></div>
   <div class="glow right-glow"></div>
 
-  <!-- Navbar 導覽列 -->
+  <!-- Navbar -->
   <nav class="navbar">
     <div class="navbar-left">
       <img src="x5logo.png" width="55" height="55" alt="fleek logo">
@@ -33,7 +33,7 @@
 
   <div class="divider"></div>
 
-  <!-- Hero 區塊 -->
+  <!-- Hero -->
   <section class="hero">
     <div class="hero-content">
       <h1>x5capital Website</h1>
@@ -260,18 +260,18 @@
   const scrollWrapper = document.querySelector('.scroll-wrapper');
   const scrollTrack = document.querySelector('.scroll-track');
 
-  // 複製一次內容，實現無縫滾動
+  // copy scroll
   scrollTrack.innerHTML += scrollTrack.innerHTML;
 
-  // 設定滾動參數
+  // scroll parameter
   let scrollAmount = scrollTrack.scrollWidth / 2;
   let currentScroll = 0;
   let isPaused = false;
 
-  // 自動滾動動畫
+  // auto
   function animateScroll() {
     if (!isPaused) {
-      currentScroll += 0.3; // 調整這邊控制速度
+      currentScroll += 0.3; // speed
       if (currentScroll >= scrollAmount) {
         currentScroll = 0;
       }
@@ -280,7 +280,7 @@
     requestAnimationFrame(animateScroll);
   }
 
-  // 滑鼠懸停暫停
+  // mouseenter
   scrollWrapper.addEventListener('mouseenter', () => {
     isPaused = true;
   });
@@ -294,7 +294,7 @@
 
   <div class="divider"></div>
 
-  <!-- Trusted by 區塊 -->
+  <!-- Trusted -->
   <section class="trusted-section">
     <h3 class="trusted-title">None of the following companies invested</h3>
     <div class="trusted-logos">
@@ -307,7 +307,7 @@
     <div class="divider-line bottom-line"></div>
   </section>
 
-  <!-- FAQ 區塊 -->
+  <!-- FAQ -->
   <section class="faq-section">
     <h2 class="faq-title">Frequently Asked Questions</h2>
   
