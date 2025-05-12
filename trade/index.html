@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>x5trade</title>
+  <link rel="icon" href="https://i.ibb.co/q3DYk2jr/Newx5logo.png" />
+  <link rel="stylesheet" href="trade.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+  <script defer src="https://s3.tradingview.com/tv.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+  <script defer src="trade.js"></script>
+</head>
+<body>
+  <div class="page-container">
+
+    <!-- Navbar -->
+    <header class="navbar">
+      <img src="https://i.ibb.co/q3zK0PDW/Newx5logo-1.png" width="55" height="55" alt="x5 logo">
+      <div class="wallet" style="position: relative;">
+        <button id="wallet-button">Connect Wallet</button>
+        <div id="wallet-dropdown" class="dropdown-menu">
+          <div id="copy-address">📋 Copy Address</div>
+          <div id="view-explorer">🌐 View on Explorer</div>
+          <div id="disconnect-wallet">🔌 Disconnect</div>
+          <div id="api-settings-trigger">⚙️ API Key 設定</div>
+        </div>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <!-- 幣種列表 -->
+      <aside class="sidebar">
+        <h3>Markets</h3>
+        <ul id="symbol-list">
+          <li data-symbol="BTCUSDT" class="active">BTC/USDT</li>
+          <li data-symbol="ETHUSDT">ETH/USDT</li>
+          <li data-symbol="BNBUSDT">BNB/USDT</li>
+          <li data-symbol="SOLUSDT">SOL/USDT</li>
+          <li data-symbol="XRPUSDT">XRP/USDT</li>
+          <li data-symbol="SUSDT">S/USDT</li>
+          <li data-symbol="SUIUSDT">台灣垃圾項目/USDT</li>
+          <li data-symbol="NXPCUSDT">NXPC/USDT</li>
+          <li data-symbol="DOGEUSDT">DOGE/USDT</li>
+          <li data-symbol="WIFUSDT">WIF/USDT</li>
+          <li data-symbol="PEPEUSDT">PEPE/USDT</li>
+        </ul>
+      </aside>
+
+      <!-- 行情 + 圖表 + 倉位 -->
+      <section class="market-panel">
+        <div id="tv-chart" style="height: 400px; margin-bottom: 24px;"></div>
+
+        <div class="price-box">
+          <h2 id="selected-symbol">BTC/USDT</h2>
+          <p>價格：<span id="price">-</span></p>
+          <p>漲跌：<span id="change">-</span></p>
+          <p>24H 成交量：<span id="volume">-</span></p>
+        </div>
+
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="positions">倉位</button>
+          <button class="tab-btn" data-tab="history">歷史訂單</button>
+        </div>
+
+        <div class="tab-content">
+          <div id="positions" class="tab active">
+            <ul id="positions-list"></ul>
+          </div>
+          <div id="history" class="tab">
+            <ul id="history-list"></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- 下單區 -->
+      <section class="order-panel">
+        <div class="close-order-panel" id="close-order-panel">✕</div>
+
+        <div class="order-tabs">
+          <button class="order-tab active" data-type="limit">限價單</button>
+          <button class="order-tab" data-type="market">市價單</button>
+        </div>
+
+        <div class="margin-mode">
+          <label><input type="radio" name="margin" value="cross" checked /> 全倉</label>
+          <label><input type="radio" name="margin" value="isolated" /> 逐倉</label>
+        </div>
+
+        <div class="leverage">
+          <label>槓桿倍數: <span id="leverage-value">20x</span></label>
+          <input type="range" min="1" max="50" value="20" id="leverage-slider" />
+        </div>
+
+        <div class="available">
+          可用餘額: <span id="available-usdt">載入中...</span> USDT
+        </div>
+
+        <form id="order-form">
+          <input type="number" id="price-input" placeholder="價格 (USDT)" />
+          <input type="number" id="quantity-input" placeholder="下單數量" />
+
+          <div class="percent-slider">
+            <input type="range" min="0" max="100" step="25" id="percent-range" />
+            <div class="percent-labels">
+              <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
+            </div>
+          </div>
+
+          <input type="number" id="take-profit" placeholder="止盈價格 (選填)" />
+          <input type="number" id="stop-loss" placeholder="止損價格 (選填)" />
+
+          <select id="side-select">
+            <option value="buy">開多 🟢</option>
+            <option value="sell">開空 🔴</option>
+          </select>
+
+          <div class="order-buttons">
+            <button type="submit" class="buy">送出訂單</button>
+          </div>
+        </form>
+      </section>
+    </main>
+  </div>
+
+  <!-- API 設定 -->
+  <div id="api-settings" class="api-settings-panel" style="display: none;">
+    <h3>API 設定</h3>
+    <input type="text" id="api-key" placeholder="API Key" />
+    <input type="password" id="api-secret" placeholder="Secret Key" />
+    <button id="save-api">儲存</button>
+    <button id="close-api">關閉</button>
+  </div>
+
+  <!-- 通知 + 開單按鈕 -->
+  <div id="toast" class="toast">✅ 訊息</div>
+  <button id="open-order-btn" class="fab">📝 開單</button>
+</body>
+</html>
