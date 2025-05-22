@@ -6,7 +6,7 @@
   <title>x5capital</title>
   <link rel="icon" href="../x5logo.png" />
   <link rel="stylesheet" href="../styles.css" />
-
+  <!-- 新增樣式: 可觀賞的代碼區塊、一鍵複製、README 區域 樣式細化 -->
   <style>
     .code-container {
       position: relative;
@@ -21,9 +21,7 @@
       color: #00ff00;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
     }
-    .code-container pre {
-      margin: 0;
-    }
+    .code-container pre { margin: 0; }
     .copy-btn {
       position: absolute;
       top: 12px;
@@ -36,9 +34,8 @@
       font-size: 0.9rem;
       color: #fff;
     }
-    .copy-btn:hover {
-      background: rgba(255, 255, 255, 0.2);
-    }
+    .copy-btn:hover { background: rgba(255, 255, 255, 0.2); }
+
     .readme-container {
       background: rgba(255, 255, 255, 0.05);
       border-radius: 8px;
@@ -50,9 +47,19 @@
       font-family: sans-serif;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
     }
-    .readme-container h2 {
-      margin-top: 0;
-      font-size: 1.5rem;
+    .readme-title {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+    }
+    .readme-subtitle {
+      font-size: 1rem;
+      color: #ccc;
+      margin-bottom: 1rem;
+    }
+    .readme-divider {
+      border: none;
+      border-top: 1px solid rgba(255, 255, 255, 0.2);
+      margin: 1rem 0;
     }
   </style>
 </head>
@@ -83,141 +90,36 @@
     <!-- 可觀賞的代碼區塊 -->
     <div class="code-container">
       <button class="copy-btn">Copy</button>
-      <pre><code>// x5BinanceAlphaBOTv1.3
+      <pre><code>// 範例代碼區塊
+function helloBinanceAlpha() {
+    console.log("Welcome to BinanceAlpha on X5 Capital!");
+}
 
-let value = 50;          // 每次買入金額
-let runtime = 3;       // 執行次數
-
-// 每一步驟的隨機延遲範圍（毫秒）：[min, max]
-const stepDelay = {
-  點擊買入tab: [10000, 13500],
-  設定金額: [2700, 3500],
-  點擊買入: [1500, 2000],
-  確認買入: [1500, 2000],
-  點擊出售tab: [3400, 3500],
-  滑桿100: [3000, 3200],
-  點擊出售: [1500, 2000],
-  確認出售: [1500, 2000],
-};
-
-// 隨機延遲函數
-const randomDelay = ([min, max]) => {
-  const ms = Math.floor(Math.random() * (max - min + 1)) + min;
-  console.log(`[x5BOT] 等待 ${ms}ms...`);
-  return new Promise(resolve => setTimeout(resolve, ms));
-};
-
-// 模擬點擊按鈕
-const simulateClick = (element, label = '按鈕') => {
-  if (!element) return console.error(`[錯誤] 找不到 ${label}`);
-  element.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-  console.log(`[x5BOT] ✅ 點擊 ${label}`);
-  return true;
-};
-
-// 設定輸入值（兼容 React）
-const setInputValue = (el, val) => {
-  if (!el) return console.error(`[錯誤] 找不到輸入框`);
-  const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-  nativeSetter.call(el, val);
-  el.dispatchEvent(new Event('input', { bubbles: true }));
-  console.log(`[x5BOT] ✅ 設定輸入值: ${val}`);
-  return true;
-};
-
-// 點擊包含指定文字的按鈕
-const clickButtonByText = (text) => {
-  const btns = [...document.querySelectorAll('button')];
-  const target = btns.find(b => b.innerText.includes(text));
-  return simulateClick(target, `按鈕（${text}）`);
-};
-
-// 點選 tab（買入/賣出）
-const clickTab = (text) => {
-  const tabs = [...document.querySelectorAll('[role="tab"]')];
-  const tab = tabs.find(t => t.innerText.includes(text));
-  return simulateClick(tab, `Tab（${text}）`);
-};
-
-// 單輪交易執行
-const runOneTrade = async (round) => {
-  console.log(`\n🎯 [x5BOT] 🚀 開始第 ${round} 筆交易`);
-
-  clickTab('買入');
-  await randomDelay(stepDelay['點擊買入tab']);
-
-  const input = document.querySelector('#fromCoinAmount');
-  setInputValue(input, value);
-  await randomDelay(stepDelay['設定金額']);
-
-  clickButtonByText('買入');
-  await randomDelay(stepDelay['點擊買入']);
-
-  clickButtonByText('確認');
-  await randomDelay(stepDelay['確認買入']);
-
-  clickTab('出售');
-  await randomDelay(stepDelay['點擊出售tab']);
-
-  const slider = document.querySelector('input[role="slider"]');
-  setInputValue(slider, '100');
-  await randomDelay(stepDelay['滑桿100']);
-
-  clickButtonByText('出售');
-  await randomDelay(stepDelay['點擊出售']);
-
-  clickButtonByText('確認');
-  console.log(`✅ [x5BOT] 第 ${round} 筆交易完成 🎉`);
-  await randomDelay(stepDelay['確認出售']);
-};
-
-// 主交易迴圈
-const runTradeLoop = async () => {
-  for (let i = 1; i <= runtime; i++) {
-    try {
-      await runOneTrade(i);
-    } catch (e) {
-      console.error(`[錯誤] 第 ${i} 筆交易失敗：${e.message}`);
-    }
-  }
-  console.log('\n董事長您吩咐的事情已經完成了!');
-};
-
-runTradeLoop();</code></pre>
+helloBinanceAlpha();</code></pre>
     </div>
 
     <!-- README 區域 (類似 GitHub) -->
     <div class="readme-container">
-      <h2>README</h2>
-      <p>
-# x5BinanceAlphaBot
+      <h2 class="readme-title">BinanceAlpha</h2>
+      <p class="readme-subtitle">用來幣安alpha買賣刷分</p>
+      <hr class="readme-divider" />
 
-用來幣安alpha買賣刷分
+      <h2 class="readme-title">功能</h2>
+      <p class="readme-subtitle">設置買入賣出金額</p>
+      <p class="readme-subtitle">每個步驟隨機延遲</p>
+      <p class="readme-subtitle">循環次數</p>
+      <hr class="readme-divider" />
 
-## 功能
+      <h2 class="readme-title">使用步驟</h2>
+      <p class="readme-subtitle">用ZKJ舉例:</p>
+      <p class="readme-subtitle">1.進入https://www.binance.com/zh-TC/alpha/bsc/0xc71b5f631354be6853efe9c3ab6b9590f8302e81</p>
+      <p class="readme-subtitle">2.打開F12</p>
+      <p class="readme-subtitle">3.找到控制台(Console)</p>
+      <p class="readme-subtitle">4.將代碼複製上去</p>
+      <hr class="readme-divider" />
 
-設置買入賣出金額
-
-每個步驟隨機延遲
-
-循環次數
-
-## 使用步驟
-
-用ZKJ舉例:
-
-1.進入https://www.binance.com/zh-TC/alpha/bsc/0xc71b5f631354be6853efe9c3ab6b9590f8302e81
-
-2.打開F12
-
-3.找到控制台(Console)
-
-4.將代碼複製上去
-
-## 隨機延遲
-
-```
-const stepDelay = {
+      <h2 class="readme-title">隨機延遲</h2>
+      <p class="readme-subtitle">const stepDelay = {
   點擊買入tab: [1500, 2500],
   設定金額: [1000, 1500],
   設定滑點: [1000, 2000],
@@ -228,14 +130,15 @@ const stepDelay = {
   設定滑點_賣: [1000, 2000],
   點擊出售: [1000, 2000],
   確認出售: [2000, 3000],
-};
-```
-舉例:
-點擊買入tab: [1500, 2500],=點擊買入tab這個步驟啟動的時間是在1.5秒-2.5秒之間,其他也是同理。
+};</p>
+      <hr class="readme-divider" />
+      <p class="readme-subtitle">舉例: 點擊買入tab: [1500, 2500],=點擊買入tab這個步驟啟動的時間是在1.5秒-2.5秒之間,其他也是同理。</p>
+      <hr class="readme-divider" />
 
-## 免責聲明
+      <h2 class="readme-title">免責聲明</h2>
+      <p class="readme-subtitle">本工具僅供研究和學習使用，使用工具進行買賣刷量交易造成虧損自行承擔。</p>
+      <hr class="readme-divider" />
 
-本工具僅供研究和學習使用，使用工具進行買賣刷量交易造成虧損自行承擔。</p>
     </div>
 
     <!-- Footer -->
