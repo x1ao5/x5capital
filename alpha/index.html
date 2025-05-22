@@ -6,9 +6,10 @@
   <title>x5capital</title>
   <link rel="icon" href="../x5logo.png" />
   <link rel="stylesheet" href="../styles.css" />
-  <!-- 新增樣式: 可觀賞的代碼區塊 -->
+
   <style>
     .code-container {
+      position: relative;
       background: rgba(255, 255, 255, 0.05);
       border-radius: 8px;
       padding: 20px;
@@ -23,6 +24,36 @@
     .code-container pre {
       margin: 0;
     }
+    .copy-btn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: rgba(255, 255, 255, 0.1);
+      border: none;
+      padding: 6px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      color: #fff;
+    }
+    .copy-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+    .readme-container {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px auto;
+      width: 80%;
+      max-width: 800px;
+      color: #fff;
+      font-family: sans-serif;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    }
+    .readme-container h2 {
+      margin-top: 0;
+      font-size: 1.5rem;
+    }
   </style>
 </head>
 <body>
@@ -36,14 +67,13 @@
         <img src="../x5logo.png" width="55" height="55" alt="x5 logo">
       </div>
       <div class="navbar-right">
-        <a href="/#">Home</a>
+        <a href="/#!">Home</a>
         <a href="/product/">Product</a>
         <a href="/trade">Trade</a>
         <a href="/alpha">BinanceAlpha</a>
         <a href="#">Resources</a>
         <a href="#">Docs</a>
         <a href="#">Blog</a>
-        <a href="#">你他媽</a>
         <button class="login-btn">Login</button>
       </div>
     </nav>
@@ -52,6 +82,7 @@
 
     <!-- 可觀賞的代碼區塊 -->
     <div class="code-container">
+      <button class="copy-btn">Copy</button>
       <pre><code>// x5BinanceAlphaBOTv1.3
 
 let value = 50;          // 每次買入金額
@@ -155,10 +186,74 @@ const runTradeLoop = async () => {
 runTradeLoop();</code></pre>
     </div>
 
+    <!-- README 區域 (類似 GitHub) -->
+    <div class="readme-container">
+      <h2>README</h2>
+      <p>
+# x5BinanceAlphaBot
+
+用來幣安alpha買賣刷分
+
+## 功能
+
+設置買入賣出金額
+
+每個步驟隨機延遲
+
+循環次數
+
+## 使用步驟
+
+用ZKJ舉例:
+
+1.進入https://www.binance.com/zh-TC/alpha/bsc/0xc71b5f631354be6853efe9c3ab6b9590f8302e81
+
+2.打開F12
+
+3.找到控制台(Console)
+
+4.將代碼複製上去
+
+## 隨機延遲
+
+```
+const stepDelay = {
+  點擊買入tab: [1500, 2500],
+  設定金額: [1000, 1500],
+  設定滑點: [1000, 2000],
+  點擊買入: [1000, 2000],
+  確認買入: [2000, 3000],
+  點擊出售tab: [1500, 2500],
+  滑桿100: [1000, 2000],
+  設定滑點_賣: [1000, 2000],
+  點擊出售: [1000, 2000],
+  確認出售: [2000, 3000],
+};
+```
+舉例:
+點擊買入tab: [1500, 2500],=點擊買入tab這個步驟啟動的時間是在1.5秒-2.5秒之間,其他也是同理。
+
+## 免責聲明
+
+本工具僅供研究和學習使用，使用工具進行買賣刷量交易造成虧損自行承擔。</p>
+    </div>
+
     <!-- Footer -->
     <footer class="footer">
       © 2025 X5 Capital. All rights reserved.
     </footer>
   </div>
+
+  <script>
+    document.querySelectorAll('.copy-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const codeText = btn.nextElementSibling.innerText;
+        navigator.clipboard.writeText(codeText).then(() => {
+          btn.textContent = 'Copied!';
+          setTimeout(() => btn.textContent = 'Copy', 2000);
+        });
+      });
+    });
+  </script>
 </body>
 </html>
