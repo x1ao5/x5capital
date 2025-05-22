@@ -52,12 +52,107 @@
 
     <!-- 可觀賞的代碼區塊 -->
     <div class="code-container">
-      <pre><code>// 範例代碼區塊
-function helloBinanceAlpha() {
-    console.log("Welcome to BinanceAlpha on X5 Capital!");
-}
+      <pre><code>// x5BinanceAlphaBOTv1.3
 
-helloBinanceAlpha();</code></pre>
+let value = 50;          // 每次買入金額
+let runtime = 3;       // 執行次數
+
+// 每一步驟的隨機延遲範圍（毫秒）：[min, max]
+const stepDelay = {
+  點擊買入tab: [10000, 13500],
+  設定金額: [2700, 3500],
+  點擊買入: [1500, 2000],
+  確認買入: [1500, 2000],
+  點擊出售tab: [3400, 3500],
+  滑桿100: [3000, 3200],
+  點擊出售: [1500, 2000],
+  確認出售: [1500, 2000],
+};
+
+// 隨機延遲函數
+const randomDelay = ([min, max]) => {
+  const ms = Math.floor(Math.random() * (max - min + 1)) + min;
+  console.log(`[x5BOT] 等待 ${ms}ms...`);
+  return new Promise(resolve => setTimeout(resolve, ms));
+};
+
+// 模擬點擊按鈕
+const simulateClick = (element, label = '按鈕') => {
+  if (!element) return console.error(`[錯誤] 找不到 ${label}`);
+  element.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  console.log(`[x5BOT] ✅ 點擊 ${label}`);
+  return true;
+};
+
+// 設定輸入值（兼容 React）
+const setInputValue = (el, val) => {
+  if (!el) return console.error(`[錯誤] 找不到輸入框`);
+  const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+  nativeSetter.call(el, val);
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  console.log(`[x5BOT] ✅ 設定輸入值: ${val}`);
+  return true;
+};
+
+// 點擊包含指定文字的按鈕
+const clickButtonByText = (text) => {
+  const btns = [...document.querySelectorAll('button')];
+  const target = btns.find(b => b.innerText.includes(text));
+  return simulateClick(target, `按鈕（${text}）`);
+};
+
+// 點選 tab（買入/賣出）
+const clickTab = (text) => {
+  const tabs = [...document.querySelectorAll('[role="tab"]')];
+  const tab = tabs.find(t => t.innerText.includes(text));
+  return simulateClick(tab, `Tab（${text}）`);
+};
+
+// 單輪交易執行
+const runOneTrade = async (round) => {
+  console.log(`\n🎯 [x5BOT] 🚀 開始第 ${round} 筆交易`);
+
+  clickTab('買入');
+  await randomDelay(stepDelay['點擊買入tab']);
+
+  const input = document.querySelector('#fromCoinAmount');
+  setInputValue(input, value);
+  await randomDelay(stepDelay['設定金額']);
+
+  clickButtonByText('買入');
+  await randomDelay(stepDelay['點擊買入']);
+
+  clickButtonByText('確認');
+  await randomDelay(stepDelay['確認買入']);
+
+  clickTab('出售');
+  await randomDelay(stepDelay['點擊出售tab']);
+
+  const slider = document.querySelector('input[role="slider"]');
+  setInputValue(slider, '100');
+  await randomDelay(stepDelay['滑桿100']);
+
+  clickButtonByText('出售');
+  await randomDelay(stepDelay['點擊出售']);
+
+  clickButtonByText('確認');
+  console.log(`✅ [x5BOT] 第 ${round} 筆交易完成 🎉`);
+  await randomDelay(stepDelay['確認出售']);
+};
+
+// 主交易迴圈
+const runTradeLoop = async () => {
+  for (let i = 1; i <= runtime; i++) {
+    try {
+      await runOneTrade(i);
+    } catch (e) {
+      console.error(`[錯誤] 第 ${i} 筆交易失敗：${e.message}`);
+    }
+  }
+  console.log('\n董事長您吩咐的事情已經完成了!');
+};
+
+runTradeLoop();</code></pre>
     </div>
 
     <!-- Footer -->
