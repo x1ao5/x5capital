@@ -381,3 +381,148 @@
   max-height: 200px;
   margin-top: 10px;
 }
+
+/* ============ Gift Button ============這裡是臨時抽獎插件 */
+:root{
+  --gift-top: 70vh;   /* 你可改這兩個變數自訂預設位置 */
+  --gift-left: 88vw;
+}
+
+.gift-btn {
+  position: fixed;
+  top: var(--gift-top);
+  left: var(--gift-left);
+  z-index: 9999;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #ff4d4f, #c91d1f);
+  box-shadow: 0 10px 25px rgba(255,77,79,.35);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  user-select: none;
+  animation: gift-bounce 1.8s ease-in-out infinite;
+  border: 2px solid rgba(255,255,255,.15);
+}
+.gift-btn:after{
+  content:"🎁";
+  font-size: 28px;
+  transform: translateY(-1px);
+}
+@keyframes gift-bounce{
+  0%,100%{ transform: translateY(0) scale(1); }
+  50%{ transform: translateY(-6px) scale(1.03); }
+}
+.gift-hint {
+  position: fixed;
+  top: calc(var(--gift-top) - 36px);
+  left: calc(var(--gift-left) - 8px);
+  z-index: 9999;
+  font-size: 12px;
+  color: #bbb;
+  background: rgba(0,0,0,.45);
+  padding: 6px 10px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 8px;
+  backdrop-filter: blur(6px);
+  display: none;
+}
+.gift-btn.editing + .gift-hint { display: block; }
+
+/* ============ Modal (密碼 & 中獎彈窗) ============ */
+.modal-mask{
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.6);
+  display: none; align-items: center; justify-content: center;
+  z-index: 10000;
+}
+.modal{
+  width: min(92vw, 420px);
+  background: linear-gradient(180deg,#121212,#0e0e0e);
+  border: 1px solid #2a2a2a;
+  border-radius: 16px;
+  padding: 18px;
+  box-shadow: 0 12px 32px rgba(0,0,0,.45);
+}
+.modal h3{
+  margin-bottom: 10px; font-size: 18px;
+}
+.modal p{ color:#aaa; font-size: 14px; margin-bottom: 10px; }
+.modal .row{ display:flex; gap:8px; margin-top: 10px; }
+.modal input{
+  flex:1;
+  background:#161616; color:#eee;
+  border:1px solid #2e2e2e; border-radius:10px;
+  padding:10px 12px; outline:none;
+}
+.modal button{
+  background:#2b2b2b; color:#fff; border:1px solid #3a3a3a;
+  padding:10px 14px; border-radius:10px; cursor:pointer;
+}
+.modal button:hover{ background:#353535; }
+
+/* ============ Wheel ============ */
+.wheel-wrap{
+  display:none; /* 進入後顯示 */
+  margin: 40px auto 80px;
+  max-width: 520px;
+  text-align:center;
+}
+.wheel-canvas{
+  width: 100%; aspect-ratio: 1 / 1; display:block;
+  margin: 0 auto; background: radial-gradient(circle at 50% 50%, #1b1b1b, #121212);
+  border-radius: 24px; border:1px solid #2a2a2a;
+  position: relative;
+}
+.wheel-pointer{
+  position: absolute; left: 50%; top: -24px; transform: translateX(-50%);
+  width: 0; height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-bottom: 48px solid #ffcc00; /* 長長的指針 */
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,.6));
+}
+.spin-btn{
+  margin-top:16px;
+  background: linear-gradient(90deg,#1e1e1e,#2c2c2c);
+  border: 1px solid #3a3a3a; color:#fff;
+  padding: 12px 18px; border-radius: 12px; cursor:pointer;
+}
+.spin-btn:disabled{ opacity:.5; cursor:not-allowed; }
+
+/* ============ Win Popup ============ */
+.win-popup{
+  text-align:center;
+}
+.win-popup img{
+  width:min(80vw, 320px);
+  border-radius: 12px; border:1px solid #2a2a2a;
+  box-shadow: 0 10px 28px rgba(0,0,0,.45);
+  margin: 10px auto 14px; display:block;
+}
+
+/* 修：把所有 modal 的層級拉滿，避免被蓋掉 */
+.modal-mask{
+  z-index: 2147483000; /* was 10000 */
+}
+
+/* 新：輪盤 Modal 內邊距微調，讓畫布更寬敞 */
+.wheel-modal .modal{
+  width: min(96vw, 580px);
+}
+
+/* 讓兩層 modal 有明確層級：win > wheel */
+#wheelMask.modal-mask { z-index: 2147483200; }
+#winMask.modal-mask   { z-index: 2147483600; }
+
+/* 避免畫布區被外層樣式影響字距/行高 */
+.wheel-canvas { line-height: 1; }
+
+.spin-btn[disabled],
+.spin-btn.done {
+  opacity: .6;
+  cursor: not-allowed;
+  filter: grayscale(0.2);
+}
+/* 插件結尾 */
