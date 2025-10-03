@@ -105,14 +105,24 @@ app.post("/orders/:id/cancel", (req, res) => {
 
 /* ========= Alchemy Webhook ========= */
 
-// HMAC 驗簽（Alchemy: header `x-alchemy-signature`，內容是 sha256=...）
 function verifyAlchemySignature(rawBody, signature, secret) {
   if (!signature || !secret) return false;
+
   try {
-    const hmac = crypto.createHmac("sha256", secret);
-    hmac.update(rawBody);
-    const digest = `sha256=${hmac.digest("hex")}`;
-    return crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(signature));
+    const h = crypto.createHmac("sha256", secret);
+    h.update(rawBody);
+    const hex = h.digest("hex");                 // 純 64 位 hex
+    const prefixed = `sha256=${hex}`;            // 'sha256=<hex>'
+
+    const sigBuf = Buffer.from(String(signature));
+    const a = Buffer.from(prefixed);
+    const b = Buffer.from(hex);
+
+    // 兩種格式擇一通過就認證成功
+    if (sigBuf.length === a.length && crypto.timingSafeEqual(sigBuf, a)) return true;
+    if (sigBuf.length === b.length && crypto.timingSafeEqual(sigBuf, b)) return true;
+
+    return false;
   } catch {
     return false;
   }
@@ -192,3 +202,4 @@ app.listen(PORT, () => {
   console.log("ACCEPT_TOKENS =", ACCEPT_TOKENS.join(", "));
   console.log("MIN_CONF =", MIN_CONFIRMATIONS, "ORDER_TTL_MIN =", ORDER_TTL_MIN);
 });
+
