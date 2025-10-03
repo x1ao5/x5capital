@@ -9,9 +9,9 @@
    ========================= */
 
 /* ====== CONFIG（請改成你的） ====== */
-const BACKEND_BASE   = 'https://salma-unrecuperative-cara.ngrok-free.dev'; // ← 換成你的 ngrok
-const RECEIVING_ADDR = '0x9c7291a52e4653a5c0501ea999e5e3fca41a1471';       // ← 換成你的收款地址
-const ORDERS_PATHS   = ['/orders'];                                        // ← 只留你確實有的路徑
+const BACKEND_BASE   = 'https://x5capital.onrender.com';
+const RECEIVING_ADDR = '0x9c7291a52e4653a5c0501ea999e5e3fca41a1471';
+const ORDERS_PATHS   = ['/orders'];
 
 /* ====== 小工具 ====== */
 const NGROK_BYPASS_HEADER = { 'ngrok-skip-browser-warning': 'any' };
@@ -446,4 +446,5 @@ window.__market_boot = function(){
   }
 };
 if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', window.__market_boot, {once:true}); } else { window.__market_boot(); }
+
 console.log('[market] market.js ready');
