@@ -1,14 +1,5 @@
 'use strict';
 
-/* =========================
-   X5 Market – Frontend (Clean Merge)
-   - 單一 getOrder（含本地同步、ngrok 繞過）
-   - 單一 updateOrderViewUI（對應 #orderView* 元素）
-   - createOrder 命名一致
-   - ORDERS_PATHS 僅 /orders，避免 404 噪音
-   ========================= */
-
-/* ====== CONFIG（請改成你的） ====== */
 const BACKEND_BASE   = 'https://x5capital.onrender.com';
 const RECEIVING_ADDR = '0x9c7291a52e4653a5c0501ea999e5e3fca41a1471';
 const ORDERS_PATHS   = ['/orders'];
@@ -448,3 +439,4 @@ window.__market_boot = function(){
 if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', window.__market_boot, {once:true}); } else { window.__market_boot(); }
 
 console.log('[market] market.js ready');
+
