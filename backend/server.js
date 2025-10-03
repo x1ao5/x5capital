@@ -102,88 +102,114 @@ app.post("/orders/:id/cancel", (req, res) => {
   res.json(o);
 });
 
-console.log("[HOOK HIT]", req.method, req.url);
+const bodyParser = require('body-parser');
+app.use('/webhook/alchemy', bodyParser.raw({ type: '*/*' }));
 
-app.post("/webhook/alchemy", (req, res) => {
-  // 簡單 token 驗證（你在 Alchemy 設 URL?token=XXX，這裡比對）
-  if (WEBHOOK_SECRET) {
-    const token = (req.query.token || "").toString();
-    if (token !== WEBHOOK_SECRET) return res.status(401).send("bad token");
+const MIN_CONFIRMATIONS = Number(process.env.MIN_CONFIRMATIONS ?? 0);
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET; // Alchemy 的 Signing Key
+const ACCEPT_TOKENS = (process.env.ACCEPT_TOKENS || 'NATIVE:eth').split(',').map(s => s.trim().toUpperCase());
+
+// 這是你的記憶體訂單存放（你原本就有）：
+const orders = new Map(); // id -> { id, amount, asset, status, expiresAt, txHash, ... }
+
+// 驗簽工具（你原本如果已有驗簽可沿用）
+const crypto = require('crypto');
+function verifyAlchemySignature(rawBody, signature, secret) {
+  if (!signature || !secret) return false;
+  try {
+    const hmac = crypto.createHmac('sha256', secret);
+    hmac.update(rawBody);
+    const digest = `sha256=${hmac.digest('hex')}`;
+    return crypto.timingSafeEqual(
+      Buffer.from(digest),
+      Buffer.from(signature)
+    );
+  } catch {
+    return false;
+  }
+}
+
+app.post('/webhook/alchemy', (req, res) => {
+  // 只在 handler 內使用 req/res
+  console.log('[HOOK HIT]', req.method, req.url);
+
+  // ── 1) 驗簽 ─────────────────────
+  const sig = req.headers['x-alchemy-signature'];
+  const raw = req.body; // 因為用 raw parser，所以是 Buffer
+  if (!verifyAlchemySignature(raw, sig, WEBHOOK_SECRET)) {
+    console.warn('[HOOK] invalid signature');
+    return res.status(401).send('invalid signature');
   }
 
-  const body = req.body || {};
-  const ev = body.event || {};
-  const acts = ev.activity || [];
-  if (!Array.isArray(acts) || acts.length === 0) {
-    return res.status(200).json({ ok: true, msg: "no activity" });
+  // Alchemy Address Activity payload 是 JSON；raw 是 Buffer 所以要 parse
+  let payload;
+  try {
+    payload = JSON.parse(raw.toString('utf8'));
+  } catch (e) {
+    console.warn('[HOOK] bad json', e);
+    return res.status(400).send('bad json');
   }
 
-  for (const a of acts) {
-    try {
-      const to = (a.toAddress || "").toLowerCase();
-      if (!to || !RECEIVING_ADDR || to !== RECEIVING_ADDR) continue;
+  // 取出活動（依你實際 payload 結構調整）
+  const events = payload?.event?.activity || [];
+  if (!Array.isArray(events) || events.length === 0) {
+    console.log('[HOOK] no activity');
+    return res.status(200).send('ok');
+  }
 
-      // 解析資產
-      let assetSym = (a.asset || "").toUpperCase();
-      let tokenAddr = (a.rawContract?.address || "").toLowerCase();
-      let decimals = Number(a.rawContract?.decimals ?? DEFAULT_DECIMALS[assetSym] ?? 18);
+  // ── 2) 檢查每個 activity，嘗試對應訂單 ─────────────────────
+  for (const ev of events) {
+    // 你根據實際欄位取值（以下範例對應 USDT/ERC20 轉帳）
+    const token = String(ev.asset || ev.category || '').toUpperCase(); // 例如 'USDT' 或 'NATIVE'
+    const amountStr = ev.value || ev.rawAmount || ev.erc20Value || '0';
+    const amount = Number(amountStr) || 0;
+    const toAddr = (ev.toAddress || ev.to || '').toLowerCase();
+    const fromAddr = (ev.fromAddress || ev.from || '').toLowerCase();
+    const txHash = ev.hash || ev.transactionHash || ev.txHash || '';
 
-      // 決定資產型別是否接受
-      let accepted = false;
-      for (const item of ACCEPT_TOKENS) {
-        const [kind, val] = item.split(":");
-        if ((kind || "").toUpperCase() === "NATIVE" && assetSym === (val || "").toUpperCase()) accepted = true;
-        if ((kind || "").toUpperCase() === "ERC20" && tokenAddr && tokenAddr === (val || "").toLowerCase()) accepted = true;
+    // 你接收的地址（.env RECEIVING_ADDR）
+    const receiving = (process.env.RECEIVING_ADDR || '').toLowerCase();
+
+    // (A) 僅接受指定 token 類型
+    if (!ACCEPT_TOKENS.includes(token)) {
+      console.log('[HOOK] skip token', token);
+      continue;
+    }
+    // (B) 必須打到你的收款位址
+    if (toAddr !== receiving) {
+      console.log('[HOOK] not to receiving addr', toAddr);
+      continue;
+    }
+
+    // 依你訂單 amount/asset 對應
+    // 這裡示範：掃所有 pending / paying 訂單，找到第一筆「尚未逾時、資產相同、金額相同」的訂單來核對
+    const now = Date.now();
+    for (const o of orders.values()) {
+      if (!['pending', 'paying'].includes(o.status)) continue;
+      if (o.expiresAt && now > o.expiresAt) continue;
+      if (String(o.asset).toUpperCase() !== token) continue;
+
+      // 數量換算：USDT 6 位小數，你可依你儲存邏輯統一換算
+      // 如果你在建單時就已經把 amount 視為“人看得懂的數字”(例如 1 USDT)，那就直接比對：
+      if (Number(o.amount) !== amount) continue;
+
+      // ── 3) 最小確認數的「paying → paid」判斷 ─────────────────
+      const conf = Number(ev.confirmations || 0); // 有些 payload 可能沒有，需要你日後輪詢補齊
+      o.txHash = txHash;
+
+      if (MIN_CONFIRMATIONS <= 0 || conf >= MIN_CONFIRMATIONS) {
+        o.status = 'paid';
+        console.log(`[ORDER PAID] id=${o.id} conf=${conf} tx=${txHash}`);
+      } else {
+        o.status = 'paying'; // 前端顯示「已收到、等待確認中」
+        console.log(`[ORDER PAYING] id=${o.id} conf=${conf}/${MIN_CONFIRMATIONS} tx=${txHash}`);
       }
-      if (!accepted) continue;
 
-      // 數量（units）
-      let units = 0n;
-      if (a.rawContract?.rawValue) {
-        units = BigInt(a.rawContract.rawValue);
-      } else if (a.value) {
-        units = BigInt(a.value); // 有些事件 value 就是 wei
-      }
-      const human = Number(units) / Math.pow(10, decimals);
-
-      const conf = Number(a.confirmations || 0);
-      const txHash = a.hash;
-
-      console.log("--- activity ---");
-      console.log({
-        txHash,
-        fromAddress: a.fromAddress,
-        toAddress: a.toAddress,
-        assetSym,
-        tokenAddr,
-        rawValueHex: a.rawContract?.rawValue || "0x0",
-        decInEvt: decimals,
-        conf,
-        network: ev.network
-      });
-
-      // 遍歷 pending 訂單，比對資產 & 金額
-      for (const [id, o] of orders.entries()) {
-        if (o.status !== "pending") continue;
-        if (o.asset !== assetSym) continue;
-        if (human + 1e-9 < o.amount) continue; // 需 >= 訂單金額
-        if (nowMs() > o.expiresAt) continue;
-
-        if (conf >= MIN_CONFIRMATIONS) {
-          o.status = "paid";
-          o.txHash = txHash;
-          o.paidAt = nowMs();
-          console.log(`✅ PAID tx=${txHash} -> order=${id}`);
-        } else {
-          console.log(`[pending conf] tx=${txHash} conf=${conf}/${MIN_CONFIRMATIONS}`);
-        }
-      }
-    } catch (e) {
-      console.error("webhook parse error:", e);
+      break; // 成功對到一張訂單就跳出
     }
   }
 
-  res.status(200).json({ ok: true });
+  return res.status(200).send('ok');
 });
 
 app.listen(PORT, () => {
@@ -193,3 +219,4 @@ app.listen(PORT, () => {
   console.log("MIN_CONF=", MIN_CONFIRMATIONS, "ORDER_TTL_MIN=", ORDER_TTL_MIN);
 
 });
+
