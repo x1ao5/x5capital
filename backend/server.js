@@ -102,18 +102,8 @@ app.post("/orders/:id/cancel", (req, res) => {
   res.json(o);
 });
 
-// ====== Alchemy Webhook ======
-/**
- * Alchemy Address Activity 格式（簡化）
- * req.body: {
- *   event: {
- *     network: "ARB_MAINNET",
- *     activity: [{
- *       fromAddress, toAddress, value, asset (ETH 或 token symbol?), hash, rawContract:{address, decimals, rawValue}, category, confirmations
- *     }]
- *   }
- * }
- */
+console.log("[HOOK HIT]", req.method, req.url);
+
 app.post("/webhook/alchemy", (req, res) => {
   // 簡單 token 驗證（你在 Alchemy 設 URL?token=XXX，這裡比對）
   if (WEBHOOK_SECRET) {
@@ -201,4 +191,5 @@ app.listen(PORT, () => {
   console.log("RECEIVING_ADDR =", RECEIVING_ADDR);
   console.log("ACCEPT_TOKENS =", ACCEPT_TOKENS.join(", "));
   console.log("MIN_CONF=", MIN_CONFIRMATIONS, "ORDER_TTL_MIN=", ORDER_TTL_MIN);
+
 });
