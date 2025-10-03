@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>x5capital</title>
+  <link rel="icon" href="https://i.ibb.co/q3DYk2jr/Newx5logo.png" />
+  <!-- 全站樣式 -->
+  <link rel="stylesheet" href="../styles.css" />
+  <!-- /market 專屬樣式 -->
+  <link rel="stylesheet" href="./market.css" />
+</head>
+<body>
+  <div class="wrapper">
+    <!-- Glow 效果 -->
+    <div class="glow left-glow"></div>
+    <div class="glow right-glow"></div>
+
+    <!-- Navbar -->
+    <nav class="navbar">
+      <div class="navbar-left">
+        <a href="/"><img src="../x5logo.png" width="55" height="55" alt="x5 logo"></a>
+      </div>
+      <div class="navbar-right">
+        <a href="/">Home</a>
+        <a href="/product">Product</a>
+        <a href="/market" class="active">Market</a>
+        <a href="/trade">Trade</a>
+        <a href="/airdrop">Airdrop</a>
+        <a href="/alpha">BinanceAlpha</a>
+        <a href="/resources">Resources</a>
+        <a href="/docs">Docs</a>
+        <a href="/blog">Blog</a>
+        <button class="login-btn" id="connectBtn">Connect Wallet</button>
+        <button class="login-btn" id="cartBtn">Cart (0)</button>
+        <button class="login-btn" id="ordersBtn">Orders (0)</button>
+      </div>
+    </nav>
+
+    <div class="divider"></div>
+
+    <!-- Hero + Toolbar -->
+    <header class="market-hero">
+      <h1 class="market-title">X5 Market — 買你喜歡的nigger，用加密結帳</h1>
+      <p class="market-sub">支援 USDT / ETH（展示版，已整合真實 Webhook）。</p>
+
+      <div class="toolbar">
+        <input class="tool-input" id="searchInput" placeholder="搜尋：NFT、Logo、週邊…" />
+        <select class="tool-select" id="categoryFilter">
+          <option value="all">所有分類</option>
+          <option value="nft">NFT / 數位藏品</option>
+          <option value="design">設計 / 服務</option>
+          <option value="membership">會員 / 訂閱</option>
+          <option value="ads">廣告位</option>
+          <option value="credits">點數 / 配額</option>
+          <option value="cs2">CS2 飾品</option>
+        </select>
+        <select class="tool-select" id="sortSelect">
+          <option value="featured">精選排序</option>
+          <option value="price_asc">價格（低→高）</option>
+          <option value="price_desc">價格（高→低）</option>
+        </select>
+        <div class="actions">
+          <button class="login-btn" id="refreshBtn">Refresh</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Product Grid -->
+    <main class="market">
+      <section class="grid" id="productGrid"><!-- JS render --></section>
+    </main>
+
+    <!-- Cart Drawer -->
+    <aside class="drawer" id="cartDrawer" aria-hidden="true">
+      <div class="drawer-head">
+        <div class="drawer-title">你的購物車</div>
+        <button class="login-btn" id="closeCart">關閉</button>
+      </div>
+      <div class="drawer-body" id="cartItems"></div>
+      <div class="drawer-foot">
+        <div class="row"><span>小計</span><span id="subTotal">—</span></div>
+        <div class="row total"><span>總計</span><span id="grandTotal">—</span></div>
+        <button class="login-btn" id="checkoutBtn">前往結帳</button>
+      </div>
+    </aside>
+
+    <!-- Orders Drawer -->
+    <aside class="drawer" id="ordersDrawer" aria-hidden="true">
+      <div class="drawer-head">
+        <div class="drawer-title">你的訂單</div>
+        <button class="login-btn" id="closeOrders">關閉</button>
+      </div>
+      <div class="drawer-body" id="ordersList"><!-- JS render --></div>
+    </aside>
+
+    <!-- Payment Modal -->
+    <div class="modal-mask" id="payMask">
+      <div class="modal" role="dialog" aria-modal="true">
+        <div class="modal-head">
+          <div>結帳</div>
+          <button class="login-btn" id="closePay">關閉</button>
+        </div>
+        <div class="modal-body">
+          <div class="label">訂單號</div>
+          <div id="orderIdText" class="addr-text">—</div>
+
+          <div class="label">支付資產</div>
+          <div class="chain-row" id="assetRow">
+            <div class="chip active" data-asset="USDT">USDT</div>
+            <div class="chip" data-asset="ETH">ETH</div>
+          </div>
+
+          <div class="label">付款金額</div>
+          <div id="payAmountText" class="addr-text">—</div>
+
+          <div class="addr-box">
+            <div class="addr-hint">轉帳到此收款位址：</div>
+            <div id="payAddr" class="addr-text">—</div>
+          </div>
+
+          <!-- QR Code -->
+          <div id="qrBox" style="width:160px;height:160px;margin-top:8px;"></div>
+
+          <!-- 倒數 -->
+          <div id="ttlText" class="hint">訂單將在 15:00 後逾時</div>
+        </div>
+        <div class="modal-foot">
+          <button class="login-btn" id="copyAddr">複製位址</button>
+          <button class="login-btn" id="confirmPaid">我已完成轉帳</button>
+          <button class="login-btn" id="cancelOrder">取消訂單</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Order View Modal（訂單詳情） -->
+    <div class="modal-mask" id="orderViewMask">
+      <div class="modal" role="dialog" aria-modal="true">
+        <div class="modal-head">
+          <div>訂單詳情</div>
+          <button class="login-btn" id="closeOrderView">關閉</button>
+        </div>
+        <div class="modal-body">
+          <div class="order-line">訂單號：<span id="orderViewId">-</span></div>
+          <div class="order-line">付款金額：<span id="orderViewAmount">-</span></div>
+          <div class="order-line">狀態：
+            <span id="orderViewStatus" class="badge badge-yellow">PENDING</span>
+          </div>
+          <div class="order-line">交易哈希：<span id="orderViewTx">-</span></div>
+          <div class="order-line">收款地址：<span id="orderViewAddr">-</span></div>
+          <div class="order-line">倒數：<span id="orderViewExpireAt">-</span></div>
+        </div>
+        <div class="modal-foot">
+          <button id="ovRefresh" class="btn">重新查詢</button>
+          <a id="ovExplorer" class="btn link" target="_blank" rel="noopener" style="display:none;">在 Arbiscan 查看</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider1 bottom-line"></div>
+  </div> <!-- wrapper end -->
+
+  <!-- Footer -->
+  <footer class="footer">© 2025 X5 Capital. All rights reserved.</footer>
+
+  <div class="toast" id="toast">Copied!</div>
+
+  <!-- libs & app -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script id="marketScript" src="./market.js?v=build-rescue-4"></script>
+  <script>
+    (function boot(){
+      function start(){
+        if (typeof window.__market_boot === 'function') window.__market_boot();
+        else { console.error('[market] __market_boot 尚未註冊，稍後再試'); setTimeout(()=>window.__market_boot&&window.__market_boot(),0); }
+      }
+      var s = document.getElementById('marketScript');
+      if (s && !s.__wired){
+        s.__wired = true;
+        s.addEventListener('load', start, {once:true});
+        s.addEventListener('error', ()=>alert('market.js 載入失敗'));
+      }
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, {once:true});
+      else setTimeout(start, 0);
+    })();
+  </script>
+</body>
+</html>
