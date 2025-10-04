@@ -1,54 +1,52 @@
-// server.js (fixed, ESM only)
+// server.js  —— ESM 版（Render/Node 直接可跑）
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import crypto from "crypto";
-import bodyParser from "body-parser";
 
 dotenv.config();
 
 const app = express();
 
-/* ========= ENV ========= */
+/* ========== ENV ========== */
 const PORT = process.env.PORT || 3000;
 
-// 允許的前端來源（多個用逗號），支援 * 全開
+// 允許的前端來源（多個用逗號），可設為 * 全開
 const CORS_ALLOW = (process.env.CORS_ALLOW || "https://www.x5capital.xyz, https://x1ao5.github.io/x5capital")
   .split(",")
   .map(s => s.trim());
 
-const RECEIVING_ADDR = (process.env.RECEIVING_ADDR || "").toLowerCase();  // 必填：收款地址
-const MIN_CONFIRMATIONS = Number(process.env.MIN_CONFIRMATIONS ?? 1);     // 最小確認數
-const ORDER_TTL_MIN = Number(process.env.ORDER_TTL_MIN ?? 15);            // 訂單有效分鐘數
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "";                  // Alchemy Signing Key
+const RECEIVING_ADDR     = (process.env.RECEIVING_ADDR || "").toLowerCase();   // 收款地址（必填）
+const MIN_CONFIRMATIONS  = Number(process.env.MIN_CONFIRMATIONS ?? 1);         // 最小確認數
+const ORDER_TTL_MIN      = Number(process.env.ORDER_TTL_MIN ?? 15);            // 訂單有效分鐘
+const WEBHOOK_SECRET     = process.env.WEBHOOK_SECRET || "";                    // Alchemy Signing Key
 
-// 可接受資產（例如 "NATIVE:eth, ERC20:0xfd086b..."）
-// 這裡把每個 entry 轉成「人看得懂的 token 字面」（例：NATIVE 或 USDT）
+// 可接受資產（例：NATIVE:eth, ERC20:0xfd08...）
 const ACCEPT_TOKENS = (process.env.ACCEPT_TOKENS || "NATIVE:eth, ERC20:0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9")
   .split(",")
   .map(s => s.trim().toUpperCase());
 
-// 小數（可自行擴充）
-const DEFAULT_DECIMALS = { ETH: 18, USDT: 6 };
-
-/* ========= CORS / Parser ========= */
+/* ========== CORS 與 Body Parser ========== */
 app.use(cors({
   origin: (origin, cb) => {
-    if (!origin) return cb(null, true);
+    if (!origin) return cb(null, true);                 // 允許 curl / server-to-server
     if (CORS_ALLOW.includes("*")) return cb(null, true);
     const ok = CORS_ALLOW.some(allow => origin.startsWith(allow));
     return ok ? cb(null, true) : cb(new Error("CORS blocked"));
   }
 }));
 
+// 👉 除了 webhook，那些一般 JSON API 都用 express.json()
+app.use(express.json());
 
-/* ========= In-memory Orders ========= */
+/* ========== In-memory Orders ========== */
 const orders = new Map(); // id -> order
-const nowMs = () => Date.now();
-const ttlMs = () => ORDER_TTL_MIN * 60 * 1000;
-const clampSymbol = s => (s || "").toUpperCase();
 
-// 定期把 pending 逾時單改成 expired
+const nowMs   = () => Date.now();
+const ttlMs   = () => ORDER_TTL_MIN * 60 * 1000;
+const clamp   = s => (s || "").toUpperCase();
+
+// 定時把逾時 pending 改為 expired
 setInterval(() => {
   const t = nowMs();
   for (const o of orders.values()) {
@@ -56,12 +54,10 @@ setInterval(() => {
   }
 }, 30_000);
 
-/* ========= Routes ========= */
-
-// health
+/* ========== Health ========== */
 app.get("/", (_, res) => res.send("x5 backend ok"));
 
-// 建單
+/* ========== 建單/查單/取消 ========== */
 app.post("/orders", (req, res) => {
   const { id, asset, amount } = req.body || {};
   if (!id || !asset || !amount) {
@@ -71,8 +67,8 @@ app.post("/orders", (req, res) => {
 
   const order = {
     id,
-    asset: clampSymbol(asset),    // 例：'USDT' 或 'ETH'
-    amount: Number(amount),       // 例：1
+    asset: clamp(asset),           // 例：USDT / ETH
+    amount: Number(amount),        // 例：1
     status: "pending",
     createdAt: nowMs(),
     expiresAt: nowMs() + ttlMs(),
@@ -84,14 +80,12 @@ app.post("/orders", (req, res) => {
   res.json(order);
 });
 
-// 查單
 app.get("/orders/:id", (req, res) => {
   const o = orders.get(req.params.id);
   if (!o) return res.status(404).json({ error: "not found" });
   res.json(o);
 });
 
-// 取消（可選）
 app.post("/orders/:id/cancel", (req, res) => {
   const o = orders.get(req.params.id);
   if (!o) return res.status(404).json({ error: "not found" });
@@ -99,6 +93,8 @@ app.post("/orders/:id/cancel", (req, res) => {
   res.json(o);
 });
 
+/* ========== Webhook（Alchemy）========== */
+/** 比對 header 簽名（同時接受 hex 及 "sha256=..." 兩種格式） */
 function timingMatch(inSig, hex) {
   const a = Buffer.from(String(inSig || ""));
   const b = Buffer.from(String(hex || ""));
@@ -110,16 +106,16 @@ function timingMatch(inSig, hex) {
   return false;
 }
 
-// 只在這條路由掛 raw parser；其他路由維持 express.json()
+// 只有這條路由使用 raw；讓我們能對「原始 body」做 HMAC
 app.post("/webhook/alchemy", express.raw({ type: "application/json" }), (req, res) => {
-  const raw = req.body;                             // <Buffer ...>
-  const sig = req.get("x-alchemy-signature") || ""; // 來自 Alchemy 的簽名
-  const secret = process.env.WEBHOOK_SECRET || "";  // 你在 Render 的環境變數
+  const raw = req.body;                                 // <Buffer ...>
+  const sig = req.get("x-alchemy-signature") || "";     // 來自 Alchemy 的簽名
+  const secret = WEBHOOK_SECRET;                        // 你在 Render 設的 Signing Key
 
-  // 1) 計算我們端的 HMAC
+  // 1) 用原始 raw buffer 算 HMAC
   const hex = crypto.createHmac("sha256", secret).update(raw).digest("hex");
 
-  // 2) 基本除錯（避免把完整簽名打到 log）
+  // 2) 除錯（避免洩露完整簽名）
   console.log("[HOOK HIT] POST /webhook/alchemy",
               "hdr=", sig.slice(0, 12) + "...",
               "hex=", hex.slice(0, 12) + "...",
@@ -131,7 +127,7 @@ app.post("/webhook/alchemy", express.raw({ type: "application/json" }), (req, re
     return res.status(401).send("invalid signature");
   }
 
-  // 4) parse JSON
+  // 4) 解析 JSON
   let body;
   try {
     body = JSON.parse(raw.toString("utf8"));
@@ -140,36 +136,46 @@ app.post("/webhook/alchemy", express.raw({ type: "application/json" }), (req, re
     return res.status(400).send("bad json");
   }
 
-  // 5) 你的既有配對邏輯（保留原本的 normalizeActivity / handle）
-  try {
-    const evt = body?.event || body;
-    const match = normalizeActivity(evt); // ← 用你原本的函式；回傳 { orderId, txHash } 等
-    if (!match) {
-      console.log("[HOOK] no match");
-      return res.json({ ok: true });
-    }
+  // 5) 這裡呼叫你原本的配對邏輯：把 Alchemy 活動轉成 { orderId, txHash ... }
+  //    下面先示範一個「非常簡化」的 normalize，若你已有，就用你自己的。
+  const evt = body?.event || body;
+  const match = normalizeActivity(evt);
+  if (!match) return res.json({ ok: true });
 
-    const o = orders.get(match.orderId);
-    if (!o) return res.json({ ok: true });
+  const o = orders.get(match.orderId);
+  if (!o) return res.json({ ok: true });
 
-    // 最小改動：若已收款、把 pending → paid（你若做了「paying → paid」也 OK）
-    if (o.status !== "paid") {
-      o.status = "paid";
-      o.txHash = match.txHash || o.txHash;
-      o.paidAt = Date.now();
-      console.log(`[ORDER PAID] ${o.id} -> ${o.asset} ${o.amount}`);
-    }
-    return res.json({ ok: true });
-  } catch (e) {
-    console.error("[HOOK] handler error:", e);
-    return res.status(500).send("hook error");
+  // ✅ 最小改動：只要配到款，就把 pending → paid（也可先標記 paying，再進階做 confirmation）
+  if (o.status !== "paid") {
+    o.status = "paid";
+    o.txHash = match.txHash || o.txHash;
+    o.paidAt = Date.now();
+    console.log(`[ORDER PAID] ${o.id} -> ${o.asset} ${o.amount}`);
   }
+
+  return res.json({ ok: true });
 });
 
-/* ========= Start ========= */
+/** 這是範例：把 Alchemy 的 event 轉成你訂單需要的資料
+ * 你可以依你的資料結構做更精準的比對（例如：金額、收款地址、token、chain 等）
+ */
+function normalizeActivity(evt) {
+  // 依你前面的設計，通常這裡會從 event.activities[] 裡找:
+  const acts = evt?.activity || evt?.activities || [];
+  for (const a of acts) {
+    // 例：把 memo 或 toAddress 搭配你下單時的規則，解析出 orderId
+    // 這裡示範：若 a?.metadata?.orderId 存在就用它（請換成你真實欄位）
+    const orderId = a?.metadata?.orderId || a?.orderId;
+    const txHash  = a?.hash || a?.txHash;
+    if (orderId && txHash) return { orderId, txHash };
+  }
+  return null;
+}
+
+/* ========== Start ========== */
 app.listen(PORT, () => {
   console.log(`x5 backend listening on http://localhost:${PORT}`);
   console.log("RECEIVING_ADDR =", RECEIVING_ADDR);
-  console.log("ACCEPT_TOKENS =", ACCEPT_TOKENS.join(", "));
+  console.log("ACCEPT_TOKENS  =", ACCEPT_TOKENS.join(", "));
   console.log("MIN_CONF =", MIN_CONFIRMATIONS, "ORDER_TTL_MIN =", ORDER_TTL_MIN);
 });
