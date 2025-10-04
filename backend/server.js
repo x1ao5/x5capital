@@ -33,114 +33,136 @@ const orders = Object.create(null);
 const app = express();
 app.use(cors({ origin: "*"}));
 
-// ！！！重點 1：Webhook 路由一定要在任何 JSON 解析器之前！！！
-//    用 express.raw() 才拿得到原始位元組做 HMAC
+// 放在任何 app.use(express.json()) 之前！
 app.post("/webhook/alchemy", express.raw({ type: "*/*" }), (req, res) => {
   try {
-    if (!WEBHOOK_SECRET) {
-      console.log("[HOOK DEBUG] missing secret");
-      return res.status(500).send("server missing secret");
-    }
-    // ---- 1) 驗簽 ----
-    const hdr = req.header("x-alchemy-signature") || "";
-    const bodyBuf = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body);
-    const digest = crypto.createHmac("sha256", WEBHOOK_SECRET)
-      .update(bodyBuf)
-      .digest("hex");
+    if (!WEBHOOK_SECRET) return res.status(500).send("server missing secret");
 
-    const ok = hdr === digest || hdr === `sha256=${digest}`;
-    if (!ok) {
+    // 1) 驗簽
+    const sig = req.header("x-alchemy-signature") || "";
+    const bodyBuf = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body);
+    const digest = crypto.createHmac("sha256", WEBHOOK_SECRET).update(bodyBuf).digest("hex");
+    if (!(sig === digest || sig === `sha256=${digest}`)) {
       console.log("[HOOK] invalid signature");
       return res.status(401).send("invalid signature");
     }
 
-    // ---- 2) 解析 payload ----
+    // 2) 解析 payload（不同版本欄位名稱都涵蓋）
     const payload = JSON.parse(bodyBuf.toString("utf8"));
-
-    // 兼容不同版本欄位
     const activities =
       payload?.event?.activities ||
       payload?.data?.event?.activity ||
       payload?.activity ||
       [];
 
-    // ---- 3) 掃描活動，找出「打到我們收款地址的 USDT 入帳」----
-    let matched = null;
+    // 3) 幫手：從 rawLog 解 ERC20 Transfer
+    const getFromRawLog = (a) => {
+      const raw = a.rawLog || a.log || a.rawContract || {};
+      const topics = raw.topics || raw.rawLogTopics || [];
+      const dataHex = (raw.data || raw.rawLogData || "").toLowerCase();
+
+      if (!topics || topics.length < 3 || !dataHex?.startsWith("0x")) return null;
+
+      // topics[2] 的最後 20 bytes 是 to 地址
+      const toHex = topics[2].toLowerCase().replace(/^0x/, "");
+      const to = ("0x" + toHex.slice(-40)).toLowerCase();
+
+      let valueBI = 0n;
+      try { valueBI = BigInt(dataHex); } catch { valueBI = 0n; }
+
+      const tokenAddr = (raw.address || "").toLowerCase();
+      return { to, valueBI, tokenAddr };
+    };
+
+    // 4) 嘗試找出一筆「打到我們地址的 USDT 入帳」
+    let match = null;
 
     for (const a of activities) {
-      // 盡量兼容各版本欄位
-      const toAddr = (a.toAddress || a.to || a.toAddressRaw || "").toLowerCase();
-      const tokenAddr = (
-        a.rawContract?.address ||
-        a.contractAddress ||
-        a.erc20?.contractAddress ||
-        a.asset_contract?.address ||
-        ""
-      ).toLowerCase();
+      // 先讀較高階欄位
+      const toAddr =
+        (a.toAddress || a.to || a.toAddressRaw || "").toLowerCase();
 
-      // 取得數量與小數位
-      // Alchemy 一般會提供 erc20Metadata.decimals / symbol
+      const tokenAddrHigh =
+        (
+          a.rawContract?.address ||
+          a.contractAddress ||
+          a.erc20?.contractAddress ||
+          a.asset_contract?.address ||
+          ""
+        ).toLowerCase();
+
+      // decimals / symbol（抓不到就給 USDT 6）
       const decimals =
         a.erc20Metadata?.decimals ??
         a.decimals ??
-        6; // usdt 多半 6
+        6;
       const symbol =
-        (a.erc20Metadata?.symbol ||
-          a.asset?.symbol ||
-          a.symbol ||
-          "USDT").toUpperCase();
+        (a.erc20Metadata?.symbol || a.asset?.symbol || a.symbol || "USDT").toUpperCase();
 
-      // value 可能在不同欄位
-      const rawValue =
-        a.value ??
-        a.rawValue ??
-        a.erc20Transfer?.value ??
-        0;
-
-      // 轉成 BigInt（都是整數基數，之後用 decimals 換算）
-      let valueBI;
-      try {
-        valueBI = BigInt(rawValue);
-      } catch {
-        valueBI = 0n;
+      // 數量（先從高階欄位；抓不到再從 rawLog）
+      let valueBI = 0n;
+      if (a.value != null || a.rawValue != null || a.erc20Transfer?.value != null) {
+        const vStr = String(a.value ?? a.rawValue ?? a.erc20Transfer?.value);
+        try { valueBI = BigInt(vStr); } catch { valueBI = 0n; }
       }
 
-      // 條件：打到我的收款地址 + USDT 合約
-      if (toAddr === RECEIVING_ADDR && ACCEPT_TOKENS.has(tokenAddr)) {
-        matched = { valueBI, decimals, symbol, txHash: a.hash || a.transactionHash || "" };
-        break;
+      // 若 still 取不到，就解析 rawLog
+      if (valueBI === 0n || !toAddr || !tokenAddrHigh) {
+        const raw = getFromRawLog(a);
+        if (raw) {
+          // 用 rawLog 取到的覆蓋
+          const token = raw.tokenAddr || tokenAddrHigh;
+          const to = raw.to || toAddr;
+          valueBI = raw.valueBI || valueBI;
+
+          if (to && token) {
+            const isMyTo = to === RECEIVING_ADDR;
+            const allowed = ACCEPT_TOKENS.has(token.toLowerCase());
+            if (isMyTo && allowed && valueBI > 0n) {
+              match = { valueBI, decimals, symbol, txHash: a.hash || a.transactionHash || "" };
+              break;
+            }
+          }
+        }
       }
-    }
 
-    // ---- 4) 如果有匹配，就把「最新一筆 pending/paying」改成 paid ----
-    if (matched) {
-      const now = Date.now();
-
-      // 找最新還在 pending/paying 且沒過期的
-      const cand = Object.values(orders)
-        .filter((o) => (o.status === "pending" || o.status === "paying") && o.expiresAt > now)
-        .sort((a, b) => b.createdAt - a.createdAt)[0];
-
-      if (cand) {
-        // 以 decimals 換算最小單位
-        const need = BigInt(Math.round(cand.amount * (10 ** matched.decimals)));
-        if (matched.valueBI >= need) {
-          cand.status = "paid";
-          cand.txHash = matched.txHash;
-          console.log(
-            "[PAID] order=%s token=%s need=%s got=%s tx=%s",
-            cand.id,
-            matched.symbol,
-            need.toString(),
-            matched.valueBI.toString(),
-            cand.txHash
-          );
-          return res.status(200).send("ok");
+      // 已有高階欄位就先比對一次
+      if (!match && toAddr && tokenAddrHigh) {
+        const isMyTo = toAddr === RECEIVING_ADDR;
+        const allowed = ACCEPT_TOKENS.has(tokenAddrHigh);
+        if (isMyTo && allowed && valueBI > 0n) {
+          match = { valueBI, decimals, symbol, txHash: a.hash || a.transactionHash || "" };
+          break;
         }
       }
     }
 
-    // 沒關係，回 200 告訴 Alchemy 已接收（避免重試風暴）
+    // 5) 更新訂單狀態
+    if (match) {
+      const now = Date.now();
+      const cand = Object.values(orders)
+        .filter(o => (o.status === "pending" || o.status === "paying") && o.expiresAt > now)
+        .sort((a, b) => b.createdAt - a.createdAt)[0];
+
+      if (cand) {
+        // 用 BigInt 10^decimals 換算需求金額
+        const need = BigInt(Math.round(cand.amount)) * (10n ** BigInt(match.decimals));
+        if (match.valueBI >= need) {
+          cand.status = "paid";
+          cand.txHash = match.txHash;
+          console.log("[PAID] order=%s need=%s got=%s tx=%s", cand.id, need.toString(), match.valueBI.toString(), cand.txHash);
+          return res.status(200).send("ok");
+        } else {
+          console.log("[HOOK] amount not enough need=%s got=%s", need.toString(), match.valueBI.toString());
+        }
+      } else {
+        console.log("[HOOK] no pending order to match");
+      }
+    } else {
+      // 觀察 payload 方便 debug
+      console.log("[HOOK] no match in activities, sample=", JSON.stringify(activities?.[0] || {}, null, 2));
+    }
+
     return res.status(200).send("no-op");
   } catch (e) {
     console.error("[HOOK] error", e);
@@ -202,3 +224,4 @@ app.listen(PORT, () => {
   console.log("MIN_CONF =", MIN_CONF, "ORDER_TTL_MIN=", ORDER_TTL_MIN);
 });
 // ================== end server.js ==================
+
