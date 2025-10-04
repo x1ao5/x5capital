@@ -159,4 +159,10 @@ body{ margin:0; background:var(--x5-bg); color:var(--x5-fg); }
 .badge-gray {
   background: #6b728022;
   color: #6b7280;
+
+}
+
+#orderViewTx a {
+  color: #3b82f6;
+  text-decoration: underline;
 }
