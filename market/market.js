@@ -261,79 +261,50 @@ function startTTLCountdown(expiresAt){
 function updateOrderViewUI(order){
   if(!order) return;
   const st = asStatus(order.status||'pending');
-  const idEl = $('#orderViewId');       if(idEl) idEl.textContent = order.id || '-';
-  const amtEl= $('#orderViewAmount');   if(amtEl) amtEl.textContent = `${order.amount??'-'} ${order.asset??''}`;
-  const stEl = $('#orderViewStatus');   if(stEl){ stEl.textContent = (st||'pending').toUpperCase();
-    stEl.classList.remove('badge','badge-green','badge-yellow','badge-red','badge-gray');
-    stEl.classList.add('badge', st==='paid'?'badge-green': st==='expired'?'badge-gray': st==='cancelled'?'badge-red':'badge-yellow');
+  $('#orderViewId').textContent = order.id || '-';
+  $('#orderViewAmount').textContent = `${order.amount??'-'} ${order.asset??''}`;
+
+  const stEl=$('#orderViewStatus');
+  if(stEl){
+    stEl.textContent = st.toUpperCase();
+    stEl.className='badge '+(st==='paid'?'badge-green':st==='expired'?'badge-gray':st==='cancelled'?'badge-red':'badge-yellow');
   }
-  const txEl = $('#orderViewTx');       if(txEl){ if(order.txHash){ txEl.innerHTML = `<a href="https://arbiscan.io/tx/${order.txHash}" target="_blank" rel="noreferrer">查看交易</a>`; } else { txEl.textContent='-'; } }
-  const expEl= $('#orderViewExpireAt'); if(expEl && order.expiresAt){ const left=Math.max(0,Math.floor((order.expiresAt-Date.now())/1000)); expEl.textContent = left+' 秒'; }
+
+  const txEl=$('#orderViewTx');
+  if(txEl){
+    if(order.txHash){
+      txEl.innerHTML=`<a href="https://arbiscan.io/tx/${order.txHash}" target="_blank">查看交易</a>`;
+    }else{
+      txEl.textContent='-';
+    }
+  }
+  if(order.expiresAt){
+    $('#orderViewExpireAt').textContent=Math.max(0,Math.floor((order.expiresAt-Date.now())/1000))+' 秒';
+  }
 }
-function openOrderView(o){ updateOrderViewUI(o); const m=$('#orderViewMask'); if(m) m.style.display='grid'; }
+
+function openOrderView(o){
+  const m=$('#orderViewMask');
+  if(m){ m.style.display='grid'; m.dataset.id=o.id; }
+  updateOrderViewUI(o);
+}
+
 function closeOrderView(){ const m=$('#orderViewMask'); if(m) m.style.display='none'; }
 
-/* ====== 事件委派 ====== */
 document.addEventListener('click', async (e)=>{
   const t=e.target;
-  const add=t.getAttribute('data-add');
-  const dec=t.getAttribute('data-dec');
-  const inc=t.getAttribute('data-inc');
-  const del=t.getAttribute('data-del');
-  const chip=t.closest && t.closest('.chip');
 
-  if(add){ addToCart(add); }
-  if(dec){ const it=cart.find(i=>i.id===dec); if(it){ it.qty=Math.max(1,it.qty-1); saveCart(); renderCart(); updateCartBadge(); } }
-  if(inc){
-    const it2=cart.find(i=>i.id===inc), p=PRODUCTS.find(x=>x.id===inc);
-    const current=(it2?.qty)||0, remain=isFinite(p?.stock)?(p.stock-current):Infinity;
-    if(remain<=0){ showToast('庫存不足'); return; }
-    if(it2){ it2.qty++; saveCart(); renderCart(); updateCartBadge(); }
-  }
-  if(del){ cart=cart.filter(i=>i.id!==del); saveCart(); renderCart(); updateCartBadge(); }
-
-  if(chip && chip.dataset.chain){ selectedChain=chip.dataset.chain; $all('#chainRow .chip').forEach(n=>n.classList.toggle('active', n.dataset.chain===selectedChain)); }
-  if(chip && chip.dataset.asset){ selectedAsset=chip.dataset.asset; $all('#assetRow .chip').forEach(n=>n.classList.toggle('active', n.dataset.asset===selectedAsset)); }
-
-  const reopen=t.getAttribute('data-order-reopen');
-  const cancel=t.getAttribute('data-order-cancel');
-  const view  =t.getAttribute('data-order-view');
-
-  if(reopen){
-    const o=ordersLocal.find(x=>x.id===reopen); if(!o) return;
-    lastOrderId=o.id; selectedAsset=o.asset;
-    $all('#assetRow .chip').forEach(n=>n.classList.toggle('active', n.dataset.asset===selectedAsset));
-    $('#orderIdText')   && ($('#orderIdText').textContent=o.id);
-    $('#payAmountText') && ($('#payAmountText').textContent=o.amount+' '+o.asset);
-    $('#payAddr')       && ($('#payAddr').textContent=RECEIVING_ADDR);
-    await renderQR(makeEip681({asset:o.asset, amount:o.amount}));
-    $('#payMask') && ($('#payMask').style.display='grid');
-    startPolling(o.id);
-    startTTLCountdown(o.expiresAt || (Date.now()+15*60*1000));
+  if(t.id==='ovRefresh'){
+    const modal=$('#orderViewMask');
+    const id=modal.dataset.id;
+    try{
+      const o=await getOrder(id);
+      if(o){ upsertLocalOrder(o); updateOrderViewUI(o); showToast('已刷新'); }
+    }catch{ showToast('查詢失敗'); }
   }
 
-  if(cancel){
-    await cancelOrder(cancel);
-    const o2=ordersLocal.find(x=>x.id===cancel);
-    upsertLocalOrder({ id:cancel, status:'cancelled' });
-    if(o2 && o2.items?.length){
-      for(const it of o2.items){ const p=PRODUCTS.find(x=>x.id===it.id); if(p && isFinite(p.stock)) p.stock+=it.qty; }
-      renderProducts(); renderCart();
-    }
-    if(pollMap.has(cancel)){ clearInterval(pollMap.get(cancel)); pollMap.delete(cancel); }
-    updateOrdersBadge(); renderOrdersDrawer();
-  }
-
-  if(view){ const o3=ordersLocal.find(x=>x.id===view); if(!o3) return; openOrderView(o3); }
-
-  // 訂單詳情：關閉/遮罩
-  if(t.id==='closeOrderView') closeOrderView();
-  if(t.id==='orderViewMask')  closeOrderView();
-
-  // 訂單詳情：手動刷新
-  if(t.id==='ovRefresh' && lastOrderId){
-    try{ const o=await getOrder(lastOrderId); if(o){ upsertLocalOrder({ id:o.id, status:o.status, expiresAt:o.expiresAt, txHash:o.txHash, network:o.network }); updateOrderViewUI(o); showToast('已刷新'); } }
-    catch{ showToast('查詢訂單失敗'); }
+  if(t.id==='closeOrderView' || t.id==='orderViewMask'){
+    closeOrderView();
   }
 });
 
@@ -439,4 +410,5 @@ window.__market_boot = function(){
 if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', window.__market_boot, {once:true}); } else { window.__market_boot(); }
 
 console.log('[market] market.js ready');
+
 
