@@ -41,10 +41,6 @@ app.use(cors({
   }
 }));
 
-// 一般 API 用 JSON parser
-app.use(express.json({ limit: "1mb" }));
-// Alchemy webhook 需要「raw body」才能驗簽，專給 /webhook/alchemy 用
-app.use("/webhook/alchemy", bodyParser.raw({ type: "*/*" }));
 
 /* ========= In-memory Orders ========= */
 const orders = new Map(); // id -> order
@@ -103,15 +99,10 @@ app.post("/orders/:id/cancel", (req, res) => {
   res.json(o);
 });
 
-// ---- Alchemy Webhook -------------------------------------------------------
-import crypto from "crypto";
-
-// 小工具：常數時間比較；同時接受 'sha256=<hex>' 或純 '<hex>'
 function timingMatch(inSig, hex) {
-  const a = Buffer.from(String(inSig));
-  const b = Buffer.from(String(hex));
+  const a = Buffer.from(String(inSig || ""));
+  const b = Buffer.from(String(hex || ""));
   const c = Buffer.from(`sha256=${hex}`);
-
   try {
     if (a.length === b.length && crypto.timingSafeEqual(a, b)) return true;
     if (a.length === c.length && crypto.timingSafeEqual(a, c)) return true;
@@ -119,67 +110,61 @@ function timingMatch(inSig, hex) {
   return false;
 }
 
-app.post(
-  "/webhook/alchemy",
-  // ⬅️ 一定要 raw，否則 HMAC 會算不一樣
-  express.raw({ type: "application/json" }),
-  (req, res) => {
-    const raw = req.body; // Buffer
-    const sig = req.get("x-alchemy-signature") || "";
-    const secret = process.env.WEBHOOK_SECRET || "";
+// 只在這條路由掛 raw parser；其他路由維持 express.json()
+app.post("/webhook/alchemy", express.raw({ type: "application/json" }), (req, res) => {
+  const raw = req.body;                             // <Buffer ...>
+  const sig = req.get("x-alchemy-signature") || ""; // 來自 Alchemy 的簽名
+  const secret = process.env.WEBHOOK_SECRET || "";  // 你在 Render 的環境變數
 
-    // 1) 先算出我們的 HMAC(hex)
-    const hex = crypto.createHmac("sha256", secret).update(raw).digest("hex");
+  // 1) 計算我們端的 HMAC
+  const hex = crypto.createHmac("sha256", secret).update(raw).digest("hex");
 
-    // 2) 限制輸出 12 碼做對比（不外流完整值）
-    console.log("[HOOK HIT] POST /webhook/alchemy");
-    console.log(
-      "[HOOK DEBUG]",
-      "len=", raw?.length,
-      "hdr=", (sig || "").slice(0, 12) + "...",
-      "hex=", hex.slice(0, 12) + "..."
-    );
+  // 2) 基本除錯（避免把完整簽名打到 log）
+  console.log("[HOOK HIT] POST /webhook/alchemy",
+              "hdr=", sig.slice(0, 12) + "...",
+              "hex=", hex.slice(0, 12) + "...",
+              "len=", raw?.length);
 
-    // 3) 驗簽
-    if (!timingMatch(sig, hex)) {
-      console.log("[HOOK] invalid signature");
-      return res.status(401).send("invalid signature");
-    }
-
-    // 4) 解析 JSON
-    let body;
-    try {
-      body = JSON.parse(raw.toString("utf8"));
-    } catch (e) {
-      console.log("[HOOK] bad json:", e.message);
-      return res.status(400).send("bad json");
-    }
-
-    // 5) 你的既有處理流程（這裡只示範最小邏輯）
-    try {
-      const evt = body?.event || body;
-      const match = normalizeActivity(evt); // 你原本的對帳邏輯
-      if (!match) {
-        console.log("[HOOK] no match");
-        return res.json({ ok: true });
-      }
-
-      const o = orders.get(match.orderId);
-      if (!o) return res.json({ ok: true });
-
-      if (o.status !== "paid") {
-        o.status = "paid";
-        o.txHash = match.txHash;
-        o.paidAt = Date.now();
-        console.log(`[ORDER PAID] ${o.id} -> ${o.asset} ${o.amount}`);
-      }
-      return res.json({ ok: true });
-    } catch (e) {
-      console.error("[HOOK] handler error:", e);
-      return res.status(500).send("hook error");
-    }
+  // 3) 驗簽
+  if (!timingMatch(sig, hex)) {
+    console.log("[HOOK] invalid signature");
+    return res.status(401).send("invalid signature");
   }
-);
+
+  // 4) parse JSON
+  let body;
+  try {
+    body = JSON.parse(raw.toString("utf8"));
+  } catch (e) {
+    console.log("[HOOK] bad json:", e.message);
+    return res.status(400).send("bad json");
+  }
+
+  // 5) 你的既有配對邏輯（保留原本的 normalizeActivity / handle）
+  try {
+    const evt = body?.event || body;
+    const match = normalizeActivity(evt); // ← 用你原本的函式；回傳 { orderId, txHash } 等
+    if (!match) {
+      console.log("[HOOK] no match");
+      return res.json({ ok: true });
+    }
+
+    const o = orders.get(match.orderId);
+    if (!o) return res.json({ ok: true });
+
+    // 最小改動：若已收款、把 pending → paid（你若做了「paying → paid」也 OK）
+    if (o.status !== "paid") {
+      o.status = "paid";
+      o.txHash = match.txHash || o.txHash;
+      o.paidAt = Date.now();
+      console.log(`[ORDER PAID] ${o.id} -> ${o.asset} ${o.amount}`);
+    }
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("[HOOK] handler error:", e);
+    return res.status(500).send("hook error");
+  }
+});
 
 /* ========= Start ========= */
 app.listen(PORT, () => {
@@ -188,5 +173,3 @@ app.listen(PORT, () => {
   console.log("ACCEPT_TOKENS =", ACCEPT_TOKENS.join(", "));
   console.log("MIN_CONF =", MIN_CONFIRMATIONS, "ORDER_TTL_MIN =", ORDER_TTL_MIN);
 });
-
-
