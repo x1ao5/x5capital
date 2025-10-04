@@ -44,61 +44,80 @@ function sameAddr(a, b) {
   return (a || "").toLowerCase() === (b || "").toLowerCase();
 }
 
-/* ========== Webhook（一定要在任何 body parser 之前） ========== */
-app.post("/webhook/alchemy", express.raw({ type: "*/*" }), (req, res) => {
-  const signature =
-    req.get("x-alchemy-signature") || req.get("X-Alchemy-Signature");
-
-  // 支援兩個環境變數名稱，擇一即可
-  const secret = process.env.ALCHEMY_SIGNING_KEY || process.env.WEBHOOK_SECRET || "";
-  if (!secret) {
-    console.error("[HOOK] missing env ALCHEMY_SIGNING_KEY/WEBHOOK_SECRET");
-    return res.status(500).send("server misconfigured");
-  }
-
-  // raw body 必須是 Buffer
-  let raw = req.body;
-  if (!Buffer.isBuffer(raw)) {
-    if (typeof raw === "string") raw = Buffer.from(raw);
-    else if (raw instanceof Uint8Array) raw = Buffer.from(raw);
-    else {
-      console.error("[HOOK] raw is not Buffer:", typeof raw);
-      return res.status(400).send("bad raw body");
+// ===== Webhook: Alchemy (Address Activity) =====
+app.post('/webhook/alchemy', express.raw({ type: 'application/json' }), (req, res) => {
+  try {
+    // 1) 驗簽（沿用你原本的邏輯）
+    const sig = req.get('X-Alchemy-Signature') || req.get('x-alchemy-signature');
+    const raw = req.body;                       // Buffer
+    const ok  = safeVerifyAlchemy(raw, sig);    // 你現有的驗簽函式
+    if (!ok) {
+      console.log('[HOOK] invalid signature');
+      return res.status(401).end();
     }
-  }
 
-  // HMAC 驗簽（同時接受 hex 與 'sha256=hex'）
-  const digest = crypto.createHmac("sha256", secret).update(raw).digest("hex");
-  const ok =
-    signature &&
-    (safeEq(signature, digest) || safeEq(signature, `sha256=${digest}`));
+    // 2) 解析 payload
+    const payload = JSON.parse(raw.toString('utf8'));
+    const network = payload?.event?.network || 'ARB_MAINNET';
+    const acts    = payload?.event?.activity || [];
 
-  if (!ok) {
-    console.log("[HOOK] invalid signature", {
-      hasSig: !!signature,
-      bodyLen: raw.length,
-    });
-    return res.status(401).send("invalid signature");
-  }
+    // 3) 常數與工具
+    const RECEIVING = (process.env.RECEIVING_ADDR || RECEIVING_ADDR).toLowerCase();
+    const USDT = '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9'; // Arbitrum One USDT
+    const DECIMALS = { [USDT]: 6, ETH: 18 };
 
-  // 驗簽 OK，解析 JSON
-  let payload;
-  try {
-    payload = JSON.parse(raw.toString("utf8"));
+    const toUnits = (n, d) => {
+      // 轉 BigInt（字串/十六進位都可）
+      if (typeof n === 'string' && n.startsWith('0x')) return BigInt(n);
+      return BigInt(n);
+    };
+
+    // 4) 掃活動，找匯入到收款地址的 USDT 轉帳
+    for (const a of acts) {
+      const to      = (a.toAddress     || a.to || '').toLowerCase();
+      const token   = (a.rawContract?.address || a.contractAddress || '').toLowerCase();
+      const txHash  = a.hash || a.txHash || a.transactionHash || '';
+      // Alchemy 可能給 raw value（十六進位）
+      const rawVal  = a.value || a.rawValue || a.rawAmount || a.erc20TokenAmount || a.data || '0x0';
+
+      // 只管匯進我們的地址 + USDT token
+      if (to !== RECEIVING) continue;
+      if (token !== USDT)   continue;
+
+      // 正確用 6 位小數換算
+      const dec   = DECIMALS[USDT];                 // 6
+      const value = toUnits(rawVal, dec);           // BigInt 的最小單位
+      const want  = (amt) => toUnits((BigInt(Math.round(amt * 10 ** dec))).toString(), dec);
+
+      // 5) 用「金額 + 資產 + 狀態」去對 pending 訂單
+      //    這裡假設你有一個 orders Map/obj，裡面存 {id, asset, amount, status, ...}
+      for (const id of Object.keys(orders)) {
+        const o = orders[id];
+        if (!o) continue;
+        if (o.status !== 'pending') continue;
+        if ((o.expiresAt && Date.now() > o.expiresAt) || o.status === 'cancelled') continue;
+
+        if (String(o.asset).toUpperCase() !== 'USDT') continue;
+
+        // 以 BigInt 比對：鏈上 value == 訂單 amount * 10^6
+        const wantVal = BigInt(Math.round(Number(o.amount) * 1_000_000));
+        if (value === wantVal) {
+          // 命中：設為已付
+          o.status  = 'paid';
+          o.txHash  = txHash;
+          o.network = network;
+
+          console.log('✅ [PAID]', id, 'amount=', o.amount, o.asset, 'tx=', o.txHash);
+          break; // 一個活動只對上一張單
+        }
+      }
+    }
+
+    return res.status(200).json({ ok: true });
   } catch (e) {
-    console.error("[HOOK] bad json:", e.message);
-    return res.status(400).send("bad json");
+    console.error('[HOOK] error', e);
+    return res.status(500).end();
   }
-
-  const acts = payload?.event?.activity || payload?.event?.activities || [];
-  console.log("✅ [HOOK OK]", payload?.event?.network, "acts:", acts.length, "sample:", acts[0]);
-
-  // 這裡先把事件丟到 app 事件（你若有更完整的「對單」邏輯，可以在這裡做 mapping）
-  try {
-    req.app.emit("alchemy_event", payload);
-  } catch {}
-
-  return res.json({ ok: true });
 });
 
 // 安全字串比較（避免時序攻擊）
@@ -258,4 +277,5 @@ app.listen(PORT, () => {
   console.log("ACCEPT_TOKENS  =", ACCEPT_TOKENS.join(", "));
   console.log("MIN_CONF =", MIN_CONFIRMATIONS, "ORDER_TTL_MIN =", ORDER_TTL_MIN);
 });
+
 
