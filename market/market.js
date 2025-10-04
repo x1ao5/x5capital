@@ -292,19 +292,111 @@ function openOrderView(o){
 function closeOrderView(){ const m=$('#orderViewMask'); if(m) m.style.display='none'; }
 
 document.addEventListener('click', async (e)=>{
-  const t=e.target;
+  const t = e.target;
 
-  if(t.id==='ovRefresh'){
-    const modal=$('#orderViewMask');
-    const id=modal.dataset.id;
-    try{
-      const o=await getOrder(id);
-      if(o){ upsertLocalOrder(o); updateOrderViewUI(o); showToast('已刷新'); }
-    }catch{ showToast('查詢失敗'); }
+  /* ---------- 商品卡：加入購物車 ---------- */
+  const addId = t.closest('[data-add]')?.getAttribute('data-add');
+  if (addId) {
+    addToCart(addId);
+    return;
   }
 
-  if(t.id==='closeOrderView' || t.id==='orderViewMask'){
-    closeOrderView();
+  /* ---------- 購物車：數量 +1/-1、移除 ---------- */
+  const incId = t.closest('[data-inc]')?.getAttribute('data-inc');
+  if (incId) {
+    const it = cart.find(x=>x.id===incId);
+    if (it) {
+      const p = PRODUCTS.find(x=>x.id===incId);
+      const remain = isFinite(p?.stock) ? p.stock - it.qty : Infinity;
+      if (remain > 0) { it.qty++; saveCart(); renderCart(); }
+      else { showToast('庫存不足'); }
+    }
+    return;
+  }
+  const decId = t.closest('[data-dec]')?.getAttribute('data-dec');
+  if (decId) {
+    const it = cart.find(x=>x.id===decId);
+    if (it) {
+      it.qty = Math.max(1, it.qty-1);
+      saveCart(); renderCart();
+    }
+    return;
+  }
+  const delId = t.closest('[data-del]')?.getAttribute('data-del');
+  if (delId) {
+    cart = cart.filter(x=>x.id!==delId);
+    saveCart(); updateCartBadge(); renderCart();
+    return;
+  }
+
+  /* ---------- 訂單抽屜：查看 ---------- */
+  const viewId = t.closest('[data-order-view]')?.getAttribute('data-order-view');
+  if (viewId) {
+    try {
+      const o = await getOrder(viewId); // 後端→本地同步
+      if (o) {
+        updateOrderViewUI(o);
+        openOrderView(o);               // 這裡會把 modal.dataset.id 設成 o.id
+      }
+    } catch {
+      showToast('查詢失敗');
+    }
+    return;
+  }
+
+  /* ---------- 訂單抽屜：重新開啟付款（pending） ---------- */
+  const reopenId = t.closest('[data-order-reopen]')?.getAttribute('data-order-reopen');
+  if (reopenId) {
+    try {
+      const o = await getOrder(reopenId);
+      if (!o) return;
+      if (asStatus(o.status)!=='pending') {
+        showToast('此訂單已不是待付款狀態'); return;
+      }
+
+      // 準備付款彈窗
+      lastOrderId = o.id;
+      $('#orderIdText')   && ($('#orderIdText').textContent=o.id);
+      $('#payAmountText') && ($('#payAmountText').textContent=`${o.amount} ${o.asset||''}`);
+      $('#payAddr')       && ($('#payAddr').textContent=RECEIVING_ADDR);
+      await renderQR(makeEip681({ asset:o.asset||'USDT', amount:o.amount }));
+
+      const pm = $('#payMask'); if (pm) pm.style.display='grid';
+      startPolling(o.id);
+      startTTLCountdown(o.expiresAt || (Date.now()+15*60*1000));
+    } catch {
+      showToast('開啟付款失敗');
+    }
+    return;
+  }
+
+  /* ---------- 訂單抽屜：取消 ---------- */
+  const cancelId = t.closest('[data-order-cancel]')?.getAttribute('data-order-cancel');
+  if (cancelId) {
+    await cancelOrder(cancelId);
+    upsertLocalOrder({ id:cancelId, status:'cancelled' });
+    renderOrdersDrawer(); updateOrdersBadge();
+    showToast('已取消訂單');
+    return;
+  }
+
+  /* ---------- 訂單詳情：重新整理 ---------- */
+  if (t.id === 'ovRefresh') {
+    const modal = $('#orderViewMask');
+    const id = modal?.dataset?.id;
+    if (!id) return;
+    try {
+      const o = await getOrder(id);
+      if (o) { updateOrderViewUI(o); showToast('已刷新'); }
+    } catch {
+      showToast('查詢失敗');
+    }
+    return;
+  }
+
+  /* ---------- 訂單詳情：關閉 ---------- */
+  if (t.id==='closeOrderView' || t.id==='orderViewMask') {
+    closeOrderView(); return;
   }
 });
 
@@ -410,5 +502,6 @@ window.__market_boot = function(){
 if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', window.__market_boot, {once:true}); } else { window.__market_boot(); }
 
 console.log('[market] market.js ready');
+
 
 
