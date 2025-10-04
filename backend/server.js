@@ -6,7 +6,7 @@ import crypto from "crypto";
 
 dotenv.config();
 
-const app = express();
+const app = globalThis.__x5_app || (globalThis.__x5_app = express());
 
 /* ========== ENV ========== */
 const PORT = process.env.PORT || 3000;
@@ -25,6 +25,57 @@ const WEBHOOK_SECRET     = process.env.WEBHOOK_SECRET || "";                 // 
 const ACCEPT_TOKENS = (process.env.ACCEPT_TOKENS || "NATIVE:eth, ERC20:0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9")
   .split(",")
   .map(s => s.trim().toUpperCase());
+
+app.post("/webhook/alchemy", express.raw({ type: "*/*" }), (req, res) => {
+  const signature =
+    req.get("x-alchemy-signature") || req.get("X-Alchemy-Signature");
+  const secret = process.env.ALCHEMY_SIGNING_KEY;
+
+  if (!secret) {
+    console.error("[HOOK] missing env ALCHEMY_SIGNING_KEY");
+    return res.status(500).send("server misconfigured");
+  }
+
+  // raw body 必須是 Buffer
+  let raw = req.body;
+  if (!Buffer.isBuffer(raw)) {
+    if (typeof raw === "string") raw = Buffer.from(raw);
+    else if (raw instanceof Uint8Array) raw = Buffer.from(raw);
+    else {
+      console.error("[HOOK] raw is not Buffer:", typeof raw);
+      return res.status(400).send("bad raw body");
+    }
+  }
+
+  // HMAC 驗簽
+  const digest = crypto.createHmac("sha256", secret).update(raw).digest("hex");
+  if (!signature || digest !== signature) {
+    console.log("[HOOK] invalid signature", {
+      hasSig: !!signature,
+      bodyLen: raw.length,
+    });
+    return res.status(401).send("invalid signature");
+  }
+
+  // 驗簽 OK，解析 JSON
+  let payload;
+  try {
+    payload = JSON.parse(raw.toString("utf8"));
+  } catch (e) {
+    console.error("[HOOK] bad json:", e.message);
+    return res.status(400).send("bad json");
+  }
+
+  console.log("✅ [HOOK OK]", payload?.event?.network, payload?.event?.type);
+
+  // 交給你的既有邏輯去把訂單狀態從 paying→paid（如果有）
+  // 不想改現有函式的話，先丟到 app 事件，後面自己接
+  try {
+    req.app.emit("alchemy_event", payload);
+  } catch {}
+
+  return res.json({ ok: true });
+});
 
 /* ========== CORS 與 Body Parser ========== */
 app.use(cors({
@@ -106,64 +157,6 @@ function timingMatch(inSig, hex) {
   return false;
 }
 
-// 只有 webhook 這條路由使用 raw；讓我們能用「原始 body」做 HMAC
-app.post("/webhook/alchemy", express.raw({ type: "application/json" }), (req, res) => {
-  const raw = req.body; // Buffer
-  const sig = req.get("x-alchemy-signature") || "";
-  const secret = WEBHOOK_SECRET;
-
-  console.log("[HOOK DEBUG] raw-len=", raw?.length, "secret?", !!secret);
-  if (!secret) {
-    console.error("❌ Missing WEBHOOK_SECRET");
-    return res.status(500).send("server misconfigured");
-  }
-  if (!raw) {
-    console.error("❌ Missing raw body");
-    return res.status(400).send("no body");
-  }
-
-  // 1) 算 HMAC
-  const hex = crypto.createHmac("sha256", secret).update(raw).digest("hex");
-
-  // 2) 基本紀錄（避免洩露完整簽名）
-  console.log("[HOOK HIT] POST /webhook/alchemy",
-    "hdr=", sig.slice(0, 12) + "...",
-    "hex=", hex.slice(0, 12) + "...");
-
-  // 3) 驗簽
-  if (!timingMatch(sig, hex)) {
-    console.log("[HOOK] invalid signature");
-    return res.status(401).send("invalid signature");
-  }
-
-  // 4) 解析 JSON
-  let body;
-  try {
-    body = JSON.parse(raw.toString("utf8"));
-  } catch (e) {
-    console.log("[HOOK] bad json:", e.message);
-    return res.status(400).send("bad json");
-  }
-
-  // 5) 配對：把 Alchemy event 轉成你的訂單資訊
-  const evt = body?.event || body;
-  const match = normalizeActivity(evt);
-  if (!match) return res.json({ ok: true });
-
-  const o = orders.get(match.orderId);
-  if (!o) return res.json({ ok: true });
-
-  // ✅ 最小改動：配到款就把 pending → paid
-  if (o.status !== "paid") {
-    o.status = "paid";
-    o.txHash = match.txHash || o.txHash;
-    o.paidAt = Date.now();
-    console.log(`[ORDER PAID] ${o.id} -> ${o.asset} ${o.amount}`);
-  }
-
-  return res.json({ ok: true });
-});
-
 /** 範例：把 Alchemy 的 event 轉為 { orderId, txHash }（請依你的實際欄位調整） */
 function normalizeActivity(evt) {
   // 通常在 evt.activity / evt.activities 裡
@@ -185,3 +178,4 @@ app.listen(PORT, () => {
   console.log("ACCEPT_TOKENS  =", ACCEPT_TOKENS.join(", "));
   console.log("MIN_CONF =", MIN_CONFIRMATIONS, "ORDER_TTL_MIN =", ORDER_TTL_MIN);
 });
+
