@@ -29,7 +29,8 @@ const ACCEPT_TOKENS = (process.env.ACCEPT_TOKENS || "NATIVE:eth, ERC20:0xfd086bc
 app.post("/webhook/alchemy", express.raw({ type: "*/*" }), (req, res) => {
   const signature =
     req.get("x-alchemy-signature") || req.get("X-Alchemy-Signature");
-  const secret = process.env.ALCHEMY_SIGNING_KEY;
+  // 取代原本那行
+const secret = process.env.ALCHEMY_SIGNING_KEY || process.env.WEBHOOK_SECRET || "";
 
   if (!secret) {
     console.error("[HOOK] missing env ALCHEMY_SIGNING_KEY");
@@ -178,4 +179,5 @@ app.listen(PORT, () => {
   console.log("ACCEPT_TOKENS  =", ACCEPT_TOKENS.join(", "));
   console.log("MIN_CONF =", MIN_CONFIRMATIONS, "ORDER_TTL_MIN =", ORDER_TTL_MIN);
 });
+
 
