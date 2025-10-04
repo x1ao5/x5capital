@@ -26,14 +26,15 @@ const ACCEPT_TOKENS = (process.env.ACCEPT_TOKENS || "NATIVE:eth, ERC20:0xfd086bc
   .split(",")
   .map(s => s.trim().toUpperCase());
 
+/* ========== Webhook（一定要在任何 body parser 之前） ========== */
 app.post("/webhook/alchemy", express.raw({ type: "*/*" }), (req, res) => {
   const signature =
     req.get("x-alchemy-signature") || req.get("X-Alchemy-Signature");
-  // 取代原本那行
-const secret = process.env.ALCHEMY_SIGNING_KEY || process.env.WEBHOOK_SECRET || "";
 
+  // 支援兩個環境變數名稱，擇一即可
+  const secret = process.env.ALCHEMY_SIGNING_KEY || process.env.WEBHOOK_SECRET || "";
   if (!secret) {
-    console.error("[HOOK] missing env ALCHEMY_SIGNING_KEY");
+    console.error("[HOOK] missing env ALCHEMY_SIGNING_KEY/WEBHOOK_SECRET");
     return res.status(500).send("server misconfigured");
   }
 
@@ -48,9 +49,13 @@ const secret = process.env.ALCHEMY_SIGNING_KEY || process.env.WEBHOOK_SECRET || 
     }
   }
 
-  // HMAC 驗簽
+  // HMAC 驗簽（同時接受 hex 與 'sha256=hex'）
   const digest = crypto.createHmac("sha256", secret).update(raw).digest("hex");
-  if (!signature || digest !== signature) {
+  const ok =
+    signature &&
+    (safeEq(signature, digest) || safeEq(signature, `sha256=${digest}`));
+
+  if (!ok) {
     console.log("[HOOK] invalid signature", {
       hasSig: !!signature,
       bodyLen: raw.length,
@@ -69,8 +74,7 @@ const secret = process.env.ALCHEMY_SIGNING_KEY || process.env.WEBHOOK_SECRET || 
 
   console.log("✅ [HOOK OK]", payload?.event?.network, payload?.event?.type);
 
-  // 交給你的既有邏輯去把訂單狀態從 paying→paid（如果有）
-  // 不想改現有函式的話，先丟到 app 事件，後面自己接
+  // 這裡先把事件丟到 app 事件（你若有更完整的「對單」邏輯，可以在這裡做 mapping）
   try {
     req.app.emit("alchemy_event", payload);
   } catch {}
@@ -78,7 +82,16 @@ const secret = process.env.ALCHEMY_SIGNING_KEY || process.env.WEBHOOK_SECRET || 
   return res.json({ ok: true });
 });
 
-/* ========== CORS 與 Body Parser ========== */
+// 安全字串比較（避免時序攻擊）
+function safeEq(a, b) {
+  try {
+    const ba = Buffer.from(String(a));
+    const bb = Buffer.from(String(b));
+    return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
+  } catch { return false; }
+}
+
+/* ========== CORS 與 Body Parser（放在 webhook 後面） ========== */
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin) return cb(null, true);                 // 允許 server-to-server / curl
@@ -145,32 +158,24 @@ app.post("/orders/:id/cancel", (req, res) => {
   res.json(o);
 });
 
-/* ========== Webhook（Alchemy）========== */
-/** 比對 header 簽名（同時接受 hex 與 "sha256=..." 兩種格式） */
-function timingMatch(inSig, hex) {
-  const a = Buffer.from(String(inSig || ""));
-  const b = Buffer.from(String(hex || ""));
-  const c = Buffer.from(`sha256=${hex}`);
-  try {
-    if (a.length === b.length && crypto.timingSafeEqual(a, b)) return true;
-    if (a.length === c.length && crypto.timingSafeEqual(a, c)) return true;
-  } catch {}
-  return false;
-}
-
-/** 範例：把 Alchemy 的 event 轉為 { orderId, txHash }（請依你的實際欄位調整） */
-function normalizeActivity(evt) {
-  // 通常在 evt.activity / evt.activities 裡
-  const acts = evt?.activity || evt?.activities || [];
+/* ==========（可選）把 Alchemy 事件轉單：示例而已 ========== */
+// 假設你未來會把 orderId 以及 txHash 帶在 webhook 的 activity 裡
+app.on("alchemy_event", (payload) => {
+  const acts = payload?.event?.activity || payload?.event?.activities || [];
   for (const a of acts) {
-    // 例：如果你在備註 / memo / metadata 裡塞了 orderId，就取出來
-    // 這裡僅示範：先嘗試 a.metadata.orderId 或 a.orderId
     const orderId = a?.metadata?.orderId || a?.orderId;
     const txHash  = a?.hash || a?.txHash;
-    if (orderId && txHash) return { orderId, txHash };
+    if (!orderId || !txHash) continue;
+
+    const o = orders.get(orderId);
+    if (!o) continue;
+    // 這裡只是示範：只要有對上單就視為已付款
+    o.status = "paid";
+    o.txHash = txHash;
+    o.paidAt = nowMs();
+    console.log("💰 order paid:", orderId, txHash);
   }
-  return null;
-}
+});
 
 /* ========== Start ========== */
 app.listen(PORT, () => {
@@ -179,5 +184,3 @@ app.listen(PORT, () => {
   console.log("ACCEPT_TOKENS  =", ACCEPT_TOKENS.join(", "));
   console.log("MIN_CONF =", MIN_CONFIRMATIONS, "ORDER_TTL_MIN =", ORDER_TTL_MIN);
 });
-
-
