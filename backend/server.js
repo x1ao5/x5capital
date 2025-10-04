@@ -108,9 +108,20 @@ function timingMatch(inSig, hex) {
 
 // 只有這條路由使用 raw；讓我們能對「原始 body」做 HMAC
 app.post("/webhook/alchemy", express.raw({ type: "application/json" }), (req, res) => {
-  const raw = req.body;                                 // <Buffer ...>
-  const sig = req.get("x-alchemy-signature") || "";     // 來自 Alchemy 的簽名
-  const secret = WEBHOOK_SECRET;                        // 你在 Render 設的 Signing Key
+  const raw = req.body;
+  const sig = req.get("x-alchemy-signature") || "";
+  const secret = process.env.WEBHOOK_SECRET || "";
+
+  console.log("[HOOK DEBUG]", typeof raw, raw?.length, "secret?", !!secret);
+
+  if (!secret) {
+    console.error("❌ Missing WEBHOOK_SECRET");
+    return res.status(500).send("server misconfigured");
+  }
+  if (!raw) {
+    console.error("❌ Missing raw body");
+    return res.status(400).send("no body");
+  }                        // 你在 Render 設的 Signing Key
 
   // 1) 用原始 raw buffer 算 HMAC
   const hex = crypto.createHmac("sha256", secret).update(raw).digest("hex");
@@ -179,3 +190,4 @@ app.listen(PORT, () => {
   console.log("ACCEPT_TOKENS  =", ACCEPT_TOKENS.join(", "));
   console.log("MIN_CONF =", MIN_CONFIRMATIONS, "ORDER_TTL_MIN =", ORDER_TTL_MIN);
 });
+
