@@ -1,198 +1,204 @@
-// server.js — ESM 版（Render/Node 直接可跑）
+// ================== server.js (drop-in) ==================
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import crypto from "crypto";
 
-dotenv.config();
+// ---- 基本設定：環境變數 ----
+const PORT = process.env.PORT || 10000;
 
-const app = globalThis.__x5_app || (globalThis.__x5_app = express());
+// 收款地址（小寫）
+const RECEIVING_ADDR = (process.env.RECEIVING_ADDR || "").toLowerCase();
 
-/* ========== ENV ========== */
-const PORT = process.env.PORT || 3000;
+// 接受代幣：這裡只做 USDT (ARB) 範例；你也可用環境變數配置
+// 例如：ACCEPT_TOKENS=ERC20:0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9
+const USDT_ARB = "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9".toLowerCase(); // Arbitrum USDT
+const ACCEPT_TOKENS = new Set([USDT_ARB]);
 
-// 允許的前端來源（多個用逗號），可設為 * 全開
-const CORS_ALLOW = (process.env.CORS_ALLOW || "https://www.x5capital.xyz, https://x1ao5.github.io/x5capital")
-  .split(",")
-  .map(s => s.trim());
+// 訂單 TTL & 確認數
+const ORDER_TTL_MIN = parseInt(process.env.ORDER_TTL_MIN || "15", 10);
+const MIN_CONF = parseInt(process.env.MIN_CONFIRMATIONS || "0", 10);
 
-const RECEIVING_ADDR     = (process.env.RECEIVING_ADDR || "").toLowerCase(); // 收款地址（可選）
-const MIN_CONFIRMATIONS  = Number(process.env.MIN_CONFIRMATIONS ?? 1);       // 最小確認數（目前先不強制）
-const ORDER_TTL_MIN      = Number(process.env.ORDER_TTL_MIN ?? 15);          // 訂單有效分鐘
-const WEBHOOK_SECRET     = process.env.WEBHOOK_SECRET || "";                 // Alchemy Signing Key（必填）
+// Alchemy Webhook 簽名 key
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || "";
 
-// 可接受資產（例：NATIVE:eth, ERC20:0xfd08...）
-const ACCEPT_TOKENS = (process.env.ACCEPT_TOKENS || "NATIVE:eth, ERC20:0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9")
-  .split(",")
-  .map(s => s.trim().toUpperCase());
-
-// 轉 uint/hex raw value -> JS number（足夠應付金額不大的 case）
-function toAmount(raw, decimals = 18) {
-  if (raw == null) return 0;
-  let big;
-  if (typeof raw === "string" && raw.startsWith("0x")) {
-    big = BigInt(raw);
-  } else {
-    // 也可能是十進位字串
-    big = BigInt(String(raw));
-  }
-  const denom = 10n ** BigInt(decimals);
-  return Number(big) / Number(denom);
-}
-
-function sameAddr(a, b) {
-  return (a || "").toLowerCase() === (b || "").toLowerCase();
-}
-
-// ====== utils: Alchemy 簽章驗證（沿用 raw body）======
-function safeVerifyAlchemy(rawBuffer, signature) {
-  try {
-    if (!WEBHOOK_SECRET || !signature) return false;
-    const hmac = crypto.createHmac("sha256", WEBHOOK_SECRET);
-    hmac.update(rawBuffer); // raw buffer
-    const digest = hmac.digest("hex");
-    return crypto.timingSafeEqual(Buffer.from(signature, "hex"), Buffer.from(digest, "hex"));
-  } catch {
-    return false;
-  }
-}
-
-/* 
- * ===== Webhook: Alchemy (Address Activity)
- * ⚠️ 放在任何 app.use(express.json()) 之前，並使用 express.raw 取原始 body
+// ---- 訂單暫存（開發階段用）----
+/**
+ * orders[orderId] = {
+ *   id, asset:'USDT', amount: 1, status:'pending'|'paying'|'paid'|'expired'|'cancelled',
+ *   createdAt, expiresAt, txHash?
+ * }
  */
-app.post('/webhook/alchemy', express.raw({ type: 'application/json' }), (req, res) => {
+const orders = Object.create(null);
+
+const app = express();
+app.use(cors({ origin: "*"}));
+
+// ！！！重點 1：Webhook 路由一定要在任何 JSON 解析器之前！！！
+//    用 express.raw() 才拿得到原始位元組做 HMAC
+app.post("/webhook/alchemy", express.raw({ type: "*/*" }), (req, res) => {
   try {
-    // 1) 驗簽
-    const sig = req.get('X-Alchemy-Signature') || req.get('x-alchemy-signature');
-    const raw = req.body; // Buffer
-    const ok  = safeVerifyAlchemy(raw, sig);
+    if (!WEBHOOK_SECRET) {
+      console.log("[HOOK DEBUG] missing secret");
+      return res.status(500).send("server missing secret");
+    }
+    // ---- 1) 驗簽 ----
+    const hdr = req.header("x-alchemy-signature") || "";
+    const bodyBuf = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body);
+    const digest = crypto.createHmac("sha256", WEBHOOK_SECRET)
+      .update(bodyBuf)
+      .digest("hex");
+
+    const ok = hdr === digest || hdr === `sha256=${digest}`;
     if (!ok) {
-      console.log('[HOOK] invalid signature');
-      return res.status(401).end();
+      console.log("[HOOK] invalid signature");
+      return res.status(401).send("invalid signature");
     }
 
-    // 2) 解析 payload
-    const payload = JSON.parse(raw.toString('utf8'));
-    const acts    = payload?.event?.activity || payload?.event?.activities || [];
-    const network = payload?.event?.network || 'ARB_MAINNET';
+    // ---- 2) 解析 payload ----
+    const payload = JSON.parse(bodyBuf.toString("utf8"));
 
-    // 3) 常數：Arbitrum One USDT
-    const USDT     = '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9';
-    const USDT_DEC = 6;
-    const RECEIVING = (process.env.RECEIVING_ADDR || RECEIVING_ADDR).toLowerCase();
+    // 兼容不同版本欄位
+    const activities =
+      payload?.event?.activities ||
+      payload?.data?.event?.activity ||
+      payload?.activity ||
+      [];
 
-    // 4) 掃活動，抓「打進我們地址的 USDT」
-    for (const a of acts) {
-      const to      = (a.toAddress || a.to || '').toLowerCase();
-      const token   = (a.rawContract?.address || a.contractAddress || '').toLowerCase();
-      const txHash  = a.hash || a.txHash || a.transactionHash || '';
-      const rawVal  = a.rawValueHex || a.rawValue || a.value || a.erc20TokenAmount || '0x0';
+    // ---- 3) 掃描活動，找出「打到我們收款地址的 USDT 入帳」----
+    let matched = null;
 
-      if (to !== RECEIVING) continue;
-      if (token !== USDT)   continue;
+    for (const a of activities) {
+      // 盡量兼容各版本欄位
+      const toAddr = (a.toAddress || a.to || a.toAddressRaw || "").toLowerCase();
+      const tokenAddr = (
+        a.rawContract?.address ||
+        a.contractAddress ||
+        a.erc20?.contractAddress ||
+        a.asset_contract?.address ||
+        ""
+      ).toLowerCase();
 
-      // 轉為 BigInt 最小單位（6 位）
-      const onchainVal = typeof rawVal === 'string' && rawVal.startsWith('0x')
-        ? BigInt(rawVal)
-        : BigInt(String(rawVal));
+      // 取得數量與小數位
+      // Alchemy 一般會提供 erc20Metadata.decimals / symbol
+      const decimals =
+        a.erc20Metadata?.decimals ??
+        a.decimals ??
+        6; // usdt 多半 6
+      const symbol =
+        (a.erc20Metadata?.symbol ||
+          a.asset?.symbol ||
+          a.symbol ||
+          "USDT").toUpperCase();
 
-      // 5) 用金額 + 資產 + 未逾時 pending 來對訂單
-      for (const o of orders.values()) {
-        if (o.status !== 'pending') continue;
-        if (Date.now() > o.expiresAt) continue;
-        if ((o.asset || '').toUpperCase() !== 'USDT') continue;
+      // value 可能在不同欄位
+      const rawValue =
+        a.value ??
+        a.rawValue ??
+        a.erc20Transfer?.value ??
+        0;
 
-        const wantVal = BigInt(Math.round(Number(o.amount) * 1_000_000)); // USDT 10^6
-        if (onchainVal === wantVal) {
-          o.status  = 'paid';
-          o.txHash  = txHash;
-          o.paidAt  = Date.now();
-          o.network = network;
-          console.log('💰 marked paid', { id: o.id, amount: o.amount, asset: o.asset, txHash });
-          break;
+      // 轉成 BigInt（都是整數基數，之後用 decimals 換算）
+      let valueBI;
+      try {
+        valueBI = BigInt(rawValue);
+      } catch {
+        valueBI = 0n;
+      }
+
+      // 條件：打到我的收款地址 + USDT 合約
+      if (toAddr === RECEIVING_ADDR && ACCEPT_TOKENS.has(tokenAddr)) {
+        matched = { valueBI, decimals, symbol, txHash: a.hash || a.transactionHash || "" };
+        break;
+      }
+    }
+
+    // ---- 4) 如果有匹配，就把「最新一筆 pending/paying」改成 paid ----
+    if (matched) {
+      const now = Date.now();
+
+      // 找最新還在 pending/paying 且沒過期的
+      const cand = Object.values(orders)
+        .filter((o) => (o.status === "pending" || o.status === "paying") && o.expiresAt > now)
+        .sort((a, b) => b.createdAt - a.createdAt)[0];
+
+      if (cand) {
+        // 以 decimals 換算最小單位
+        const need = BigInt(Math.round(cand.amount * (10 ** matched.decimals)));
+        if (matched.valueBI >= need) {
+          cand.status = "paid";
+          cand.txHash = matched.txHash;
+          console.log(
+            "[PAID] order=%s token=%s need=%s got=%s tx=%s",
+            cand.id,
+            matched.symbol,
+            need.toString(),
+            matched.valueBI.toString(),
+            cand.txHash
+          );
+          return res.status(200).send("ok");
         }
       }
     }
 
-    return res.status(200).json({ ok: true });
+    // 沒關係，回 200 告訴 Alchemy 已接收（避免重試風暴）
+    return res.status(200).send("no-op");
   } catch (e) {
-    console.error('[HOOK] error', e);
-    return res.status(500).end();
+    console.error("[HOOK] error", e);
+    return res.status(500).send("error");
   }
 });
 
-/* ========== CORS 與 Body Parser（放在 webhook 後面） ========== */
-app.use(cors({
-  origin: (origin, cb) => {
-    if (!origin) return cb(null, true);                 // 允許 server-to-server / curl
-    if (CORS_ALLOW.includes("*")) return cb(null, true);
-    const ok = CORS_ALLOW.some(allow => origin.startsWith(allow));
-    return ok ? cb(null, true) : cb(new Error("CORS blocked"));
-  }
-}));
-
-// 👉 一般 JSON API 用 express.json()
+// ！！！重點 2：其餘路由才開始用 JSON parser
 app.use(express.json());
 
-/* ========== In-memory Orders ========== */
-const orders = new Map(); // id -> order
+// ---- 訂單 API：建立、查詢 ----
 
-const nowMs = () => Date.now();
-const ttlMs = () => ORDER_TTL_MIN * 60 * 1000;
-const clamp = s => (s || "").toUpperCase();
-
-// 定時把逾時 pending 改為 expired（避免一堆殭屍單）
-setInterval(() => {
-  const t = nowMs();
-  for (const o of orders.values()) {
-    if (o.status === "pending" && t > o.expiresAt) o.status = "expired";
-  }
-}, 30_000);
-
-/* ========== Health ========== */
-app.get("/", (_, res) => res.send("x5 backend ok"));
-
-/* ========== 建單 / 查單 / 取消 ========== */
+// 建立訂單
 app.post("/orders", (req, res) => {
-  const { id, asset, amount } = req.body || {};
-  if (!id || !asset || !amount) {
-    return res.status(400).json({ error: "id/asset/amount required" });
-  }
-  if (orders.has(id)) return res.status(400).json({ error: "order exists" });
+  const { id, asset = "USDT", amount = 1 } = req.body || {};
+  if (!id) return res.status(400).json({ ok: false, error: "missing id" });
 
-  const order = {
+  const now = Date.now();
+  const expiresAt = now + ORDER_TTL_MIN * 60 * 1000;
+
+  orders[id] = {
     id,
-    asset: clamp(asset),           // 例：USDT / ETH
-    amount: Number(amount),        // 例：1
+    asset,
+    amount: Number(amount),
     status: "pending",
-    createdAt: nowMs(),
-    expiresAt: nowMs() + ttlMs(),
-    txHash: null,
-    paidAt: null
+    createdAt: now,
+    expiresAt
   };
-  orders.set(id, order);
-  console.log("[ORDERS API] POST /orders -> ok", id, order.asset, order.amount);
-  res.json(order);
+
+  console.log("[ORDERS API] POST /orders -> ok order=%s %s %s", id, asset, amount);
+  res.json({ ok: true, order: orders[id] });
 });
 
-app.get("/orders/:id", (req, res) => {
-  const o = orders.get(req.params.id);
-  if (!o) return res.status(404).json({ error: "not found" });
-  res.json(o);
+// 查單
+app.get("/orders/:id", (_req, res) => {
+  const id = _req.params.id;
+  const o = orders[id];
+  if (!o) return res.status(404).json({ ok: false, error: "not found" });
+
+  // 過期就標記 expired
+  if (o.status !== "paid" && Date.now() > o.expiresAt) o.status = "expired";
+  res.json({ ok: true, order: o });
 });
 
+// 手動取消（選擇性）
 app.post("/orders/:id/cancel", (req, res) => {
-  const o = orders.get(req.params.id);
-  if (!o) return res.status(404).json({ error: "not found" });
-  if (o.status === "pending") o.status = "cancelled";
-  res.json(o);
+  const id = req.params.id;
+  const o = orders[id];
+  if (!o) return res.status(404).json({ ok: false, error: "not found" });
+  if (o.status === "paid") return res.status(400).json({ ok: false, error: "already paid" });
+  o.status = "cancelled";
+  res.json({ ok: true, order: o });
 });
 
-/* ========== Start ========== */
 app.listen(PORT, () => {
   console.log(`x5 backend listening on http://localhost:${PORT}`);
   console.log("RECEIVING_ADDR =", RECEIVING_ADDR);
-  console.log("ACCEPT_TOKENS  =", ACCEPT_TOKENS.join(", "));
-  console.log("MIN_CONF =", MIN_CONFIRMATIONS, "ORDER_TTL_MIN =", ORDER_TTL_MIN);
+  console.log("ACCEPT_TOKENS =", [...ACCEPT_TOKENS].join(", "));
+  console.log("MIN_CONF =", MIN_CONF, "ORDER_TTL_MIN=", ORDER_TTL_MIN);
 });
+// ================== end server.js ==================
