@@ -1,4 +1,4 @@
-// server.js  —— ESM 版（Render/Node 直接可跑）
+// server.js — ESM 版（Render/Node 直接可跑）
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -16,10 +16,10 @@ const CORS_ALLOW = (process.env.CORS_ALLOW || "https://www.x5capital.xyz, https:
   .split(",")
   .map(s => s.trim());
 
-const RECEIVING_ADDR     = (process.env.RECEIVING_ADDR || "").toLowerCase();   // 收款地址（必填）
-const MIN_CONFIRMATIONS  = Number(process.env.MIN_CONFIRMATIONS ?? 1);         // 最小確認數
-const ORDER_TTL_MIN      = Number(process.env.ORDER_TTL_MIN ?? 15);            // 訂單有效分鐘
-const WEBHOOK_SECRET     = process.env.WEBHOOK_SECRET || "";                    // Alchemy Signing Key
+const RECEIVING_ADDR     = (process.env.RECEIVING_ADDR || "").toLowerCase(); // 收款地址（可選）
+const MIN_CONFIRMATIONS  = Number(process.env.MIN_CONFIRMATIONS ?? 1);       // 最小確認數（目前先不強制）
+const ORDER_TTL_MIN      = Number(process.env.ORDER_TTL_MIN ?? 15);          // 訂單有效分鐘
+const WEBHOOK_SECRET     = process.env.WEBHOOK_SECRET || "";                 // Alchemy Signing Key（必填）
 
 // 可接受資產（例：NATIVE:eth, ERC20:0xfd08...）
 const ACCEPT_TOKENS = (process.env.ACCEPT_TOKENS || "NATIVE:eth, ERC20:0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9")
@@ -29,24 +29,24 @@ const ACCEPT_TOKENS = (process.env.ACCEPT_TOKENS || "NATIVE:eth, ERC20:0xfd086bc
 /* ========== CORS 與 Body Parser ========== */
 app.use(cors({
   origin: (origin, cb) => {
-    if (!origin) return cb(null, true);                 // 允許 curl / server-to-server
+    if (!origin) return cb(null, true);                 // 允許 server-to-server / curl
     if (CORS_ALLOW.includes("*")) return cb(null, true);
     const ok = CORS_ALLOW.some(allow => origin.startsWith(allow));
     return ok ? cb(null, true) : cb(new Error("CORS blocked"));
   }
 }));
 
-// 👉 除了 webhook，那些一般 JSON API 都用 express.json()
+// 👉 一般 JSON API 用 express.json()
 app.use(express.json());
 
 /* ========== In-memory Orders ========== */
 const orders = new Map(); // id -> order
 
-const nowMs   = () => Date.now();
-const ttlMs   = () => ORDER_TTL_MIN * 60 * 1000;
-const clamp   = s => (s || "").toUpperCase();
+const nowMs = () => Date.now();
+const ttlMs = () => ORDER_TTL_MIN * 60 * 1000;
+const clamp = s => (s || "").toUpperCase();
 
-// 定時把逾時 pending 改為 expired
+// 定時把逾時 pending 改為 expired（避免一堆殭屍單）
 setInterval(() => {
   const t = nowMs();
   for (const o of orders.values()) {
@@ -57,7 +57,7 @@ setInterval(() => {
 /* ========== Health ========== */
 app.get("/", (_, res) => res.send("x5 backend ok"));
 
-/* ========== 建單/查單/取消 ========== */
+/* ========== 建單 / 查單 / 取消 ========== */
 app.post("/orders", (req, res) => {
   const { id, asset, amount } = req.body || {};
   if (!id || !asset || !amount) {
@@ -94,7 +94,7 @@ app.post("/orders/:id/cancel", (req, res) => {
 });
 
 /* ========== Webhook（Alchemy）========== */
-/** 比對 header 簽名（同時接受 hex 及 "sha256=..." 兩種格式） */
+/** 比對 header 簽名（同時接受 hex 與 "sha256=..." 兩種格式） */
 function timingMatch(inSig, hex) {
   const a = Buffer.from(String(inSig || ""));
   const b = Buffer.from(String(hex || ""));
@@ -106,14 +106,13 @@ function timingMatch(inSig, hex) {
   return false;
 }
 
-// 只有這條路由使用 raw；讓我們能對「原始 body」做 HMAC
+// 只有 webhook 這條路由使用 raw；讓我們能用「原始 body」做 HMAC
 app.post("/webhook/alchemy", express.raw({ type: "application/json" }), (req, res) => {
-  const raw = req.body;
+  const raw = req.body; // Buffer
   const sig = req.get("x-alchemy-signature") || "";
-  const secret = process.env.WEBHOOK_SECRET || "";
+  const secret = WEBHOOK_SECRET;
 
-  console.log("[HOOK DEBUG]", typeof raw, raw?.length, "secret?", !!secret);
-
+  console.log("[HOOK DEBUG] raw-len=", raw?.length, "secret?", !!secret);
   if (!secret) {
     console.error("❌ Missing WEBHOOK_SECRET");
     return res.status(500).send("server misconfigured");
@@ -121,16 +120,15 @@ app.post("/webhook/alchemy", express.raw({ type: "application/json" }), (req, re
   if (!raw) {
     console.error("❌ Missing raw body");
     return res.status(400).send("no body");
-  }                        // 你在 Render 設的 Signing Key
+  }
 
-  // 1) 用原始 raw buffer 算 HMAC
+  // 1) 算 HMAC
   const hex = crypto.createHmac("sha256", secret).update(raw).digest("hex");
 
-  // 2) 除錯（避免洩露完整簽名）
+  // 2) 基本紀錄（避免洩露完整簽名）
   console.log("[HOOK HIT] POST /webhook/alchemy",
-              "hdr=", sig.slice(0, 12) + "...",
-              "hex=", hex.slice(0, 12) + "...",
-              "len=", raw?.length);
+    "hdr=", sig.slice(0, 12) + "...",
+    "hex=", hex.slice(0, 12) + "...");
 
   // 3) 驗簽
   if (!timingMatch(sig, hex)) {
@@ -147,8 +145,7 @@ app.post("/webhook/alchemy", express.raw({ type: "application/json" }), (req, re
     return res.status(400).send("bad json");
   }
 
-  // 5) 這裡呼叫你原本的配對邏輯：把 Alchemy 活動轉成 { orderId, txHash ... }
-  //    下面先示範一個「非常簡化」的 normalize，若你已有，就用你自己的。
+  // 5) 配對：把 Alchemy event 轉成你的訂單資訊
   const evt = body?.event || body;
   const match = normalizeActivity(evt);
   if (!match) return res.json({ ok: true });
@@ -156,7 +153,7 @@ app.post("/webhook/alchemy", express.raw({ type: "application/json" }), (req, re
   const o = orders.get(match.orderId);
   if (!o) return res.json({ ok: true });
 
-  // ✅ 最小改動：只要配到款，就把 pending → paid（也可先標記 paying，再進階做 confirmation）
+  // ✅ 最小改動：配到款就把 pending → paid
   if (o.status !== "paid") {
     o.status = "paid";
     o.txHash = match.txHash || o.txHash;
@@ -167,15 +164,13 @@ app.post("/webhook/alchemy", express.raw({ type: "application/json" }), (req, re
   return res.json({ ok: true });
 });
 
-/** 這是範例：把 Alchemy 的 event 轉成你訂單需要的資料
- * 你可以依你的資料結構做更精準的比對（例如：金額、收款地址、token、chain 等）
- */
+/** 範例：把 Alchemy 的 event 轉為 { orderId, txHash }（請依你的實際欄位調整） */
 function normalizeActivity(evt) {
-  // 依你前面的設計，通常這裡會從 event.activities[] 裡找:
+  // 通常在 evt.activity / evt.activities 裡
   const acts = evt?.activity || evt?.activities || [];
   for (const a of acts) {
-    // 例：把 memo 或 toAddress 搭配你下單時的規則，解析出 orderId
-    // 這裡示範：若 a?.metadata?.orderId 存在就用它（請換成你真實欄位）
+    // 例：如果你在備註 / memo / metadata 裡塞了 orderId，就取出來
+    // 這裡僅示範：先嘗試 a.metadata.orderId 或 a.orderId
     const orderId = a?.metadata?.orderId || a?.orderId;
     const txHash  = a?.hash || a?.txHash;
     if (orderId && txHash) return { orderId, txHash };
@@ -190,4 +185,3 @@ app.listen(PORT, () => {
   console.log("ACCEPT_TOKENS  =", ACCEPT_TOKENS.join(", "));
   console.log("MIN_CONF =", MIN_CONFIRMATIONS, "ORDER_TTL_MIN =", ORDER_TTL_MIN);
 });
-
