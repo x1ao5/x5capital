@@ -134,25 +134,21 @@
     </div>
 
     <!-- Order View Modal（訂單詳情） -->
-    <div class="modal-mask" id="orderViewMask">
-      <div class="modal" role="dialog" aria-modal="true">
-        <div class="modal-head">
-          <div>訂單詳情</div>
-          <button class="login-btn" id="closeOrderView">關閉</button>
-        </div>
-        <div class="modal-body">
-          <div class="order-line">訂單號：<span id="orderViewId">-</span></div>
-          <div class="order-line">付款金額：<span id="orderViewAmount">-</span></div>
-          <div class="order-line">狀態：
-            <span id="orderViewStatus" class="badge badge-yellow">PENDING</span>
-          </div>
-          <div class="order-line">交易哈希：<span id="orderViewTx">-</span></div>
-          <div class="order-line">收款地址：<span id="orderViewAddr">-</span></div>
-          <div class="order-line">倒數：<span id="orderViewExpireAt">-</span></div>
-        </div>
-        <div class="modal-foot">
-          <button id="ovRefresh" class="btn">重新查詢</button>
-          <a id="ovExplorer" class="btn link" target="_blank" rel="noopener" style="display:none;">在 Arbiscan 查看</a>
+    <div id="orderViewMask" class="modal-mask">
+      <div class="modal">
+       <div class="modal-header">
+       <span>訂單詳情</span>
+       <button id="closeOrderView">×</button>
+    </div>
+    <div class="modal-body">
+      <div>訂單號：<span id="orderViewId"></span></div>
+      <div>金額：<span id="orderViewAmount"></span></div>
+      <div>狀態：<span id="orderViewStatus" class="badge"></span></div>
+      <div>交易哈希：<span id="orderViewTx">-</span></div>
+      <div>到期：<span id="orderViewExpireAt">-</span></div>
+    </div>
+    <div class="modal-footer">
+      <button id="ovRefresh">重新查詢</button>
         </div>
       </div>
     </div>
@@ -185,4 +181,5 @@
     })();
   </script>
 </body>
+
 </html>
