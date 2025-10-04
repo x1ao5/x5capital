@@ -103,97 +103,83 @@ app.post("/orders/:id/cancel", (req, res) => {
   res.json(o);
 });
 
-/* ========= Alchemy Webhook ========= */
+// ---- Alchemy Webhook -------------------------------------------------------
+import crypto from "crypto";
 
-function verifyAlchemySignature(rawBody, signature, secret) {
-  if (!signature || !secret) return false;
+// 小工具：常數時間比較；同時接受 'sha256=<hex>' 或純 '<hex>'
+function timingMatch(inSig, hex) {
+  const a = Buffer.from(String(inSig));
+  const b = Buffer.from(String(hex));
+  const c = Buffer.from(`sha256=${hex}`);
 
   try {
-    const h = crypto.createHmac("sha256", secret);
-    h.update(rawBody);
-    const hex = h.digest("hex");                 // 純 64 位 hex
-    const prefixed = `sha256=${hex}`;            // 'sha256=<hex>'
-
-    const sigBuf = Buffer.from(String(signature));
-    const a = Buffer.from(prefixed);
-    const b = Buffer.from(hex);
-
-    // 兩種格式擇一通過就認證成功
-    if (sigBuf.length === a.length && crypto.timingSafeEqual(sigBuf, a)) return true;
-    if (sigBuf.length === b.length && crypto.timingSafeEqual(sigBuf, b)) return true;
-
-    return false;
-  } catch {
-    return false;
-  }
+    if (a.length === b.length && crypto.timingSafeEqual(a, b)) return true;
+    if (a.length === c.length && crypto.timingSafeEqual(a, c)) return true;
+  } catch {}
+  return false;
 }
 
-app.post("/webhook/alchemy", (req, res) => {
-  console.log("[HOOK HIT]", req.method, req.url);
+app.post(
+  "/webhook/alchemy",
+  // ⬅️ 一定要 raw，否則 HMAC 會算不一樣
+  express.raw({ type: "application/json" }),
+  (req, res) => {
+    const raw = req.body; // Buffer
+    const sig = req.get("x-alchemy-signature") || "";
+    const secret = process.env.WEBHOOK_SECRET || "";
 
-  // 1) 驗簽
-  const sig = req.headers["x-alchemy-signature"];
-  const raw = req.body; // Buffer (因為用 raw parser)
-  if (!verifyAlchemySignature(raw, sig, WEBHOOK_SECRET)) {
-    console.warn("[HOOK] invalid signature");
-    return res.status(401).send("invalid signature");
-  }
+    // 1) 先算出我們的 HMAC(hex)
+    const hex = crypto.createHmac("sha256", secret).update(raw).digest("hex");
 
-  // 2) 解析 payload
-  let payload;
-  try {
-    payload = JSON.parse(raw.toString("utf8"));
-  } catch (e) {
-    console.warn("[HOOK] bad json", e);
-    return res.status(400).send("bad json");
-  }
+    // 2) 限制輸出 12 碼做對比（不外流完整值）
+    console.log("[HOOK HIT] POST /webhook/alchemy");
+    console.log(
+      "[HOOK DEBUG]",
+      "len=", raw?.length,
+      "hdr=", (sig || "").slice(0, 12) + "...",
+      "hex=", hex.slice(0, 12) + "..."
+    );
 
-  // Address Activity: 事件陣列
-  const events = payload?.event?.activity || [];
-  if (!Array.isArray(events) || events.length === 0) {
-    console.log("[HOOK] no activity");
-    return res.status(200).send("ok");
-  }
+    // 3) 驗簽
+    if (!timingMatch(sig, hex)) {
+      console.log("[HOOK] invalid signature");
+      return res.status(401).send("invalid signature");
+    }
 
-  // 3) 嘗試把每個 activity 對到訂單
-  const receiving = RECEIVING_ADDR; // 你的收款地址
-  for (const ev of events) {
-    const token = String(ev.asset || ev.category || "").toUpperCase(); // 例：'USDT' / 'NATIVE'
-    const toAddr = (ev.toAddress || ev.to || "").toLowerCase();
-    const amount = Number(ev.value || ev.rawAmount || ev.erc20Value || "0"); // 人看得懂的數字
-    const txHash = ev.hash || ev.transactionHash || ev.txHash || "";
-    const conf = Number(ev.confirmations || 0);
+    // 4) 解析 JSON
+    let body;
+    try {
+      body = JSON.parse(raw.toString("utf8"));
+    } catch (e) {
+      console.log("[HOOK] bad json:", e.message);
+      return res.status(400).send("bad json");
+    }
 
-    // 只接受白名單 token
-    if (!ACCEPT_TOKENS.includes(token)) continue;
-    // 必須打到你的收款位址
-    if (toAddr !== receiving) continue;
-
-    // 掃描可以匹配的訂單（pending/paying、未逾時、資產一致、金額相同）
-    const now = Date.now();
-    for (const o of orders.values()) {
-      if (!["pending", "paying"].includes(o.status)) continue;
-      if (o.expiresAt && now > o.expiresAt) continue;
-      if (String(o.asset).toUpperCase() !== token) continue;
-      if (Number(o.amount) !== amount) continue;
-
-      o.txHash = txHash;
-
-      // 4) 最小確認數門檻：paying → paid
-      if (MIN_CONFIRMATIONS <= 0 || conf >= MIN_CONFIRMATIONS) {
-        o.status = "paid";
-        o.paidAt = Date.now();
-        console.log(`[ORDER PAID] id=${o.id} conf=${conf} tx=${txHash}`);
-      } else {
-        o.status = "paying";
-        console.log(`[ORDER PAYING] id=${o.id} conf=${conf}/${MIN_CONFIRMATIONS} tx=${txHash}`);
+    // 5) 你的既有處理流程（這裡只示範最小邏輯）
+    try {
+      const evt = body?.event || body;
+      const match = normalizeActivity(evt); // 你原本的對帳邏輯
+      if (!match) {
+        console.log("[HOOK] no match");
+        return res.json({ ok: true });
       }
-      break; // 成功對到一張就跳出迴圈
+
+      const o = orders.get(match.orderId);
+      if (!o) return res.json({ ok: true });
+
+      if (o.status !== "paid") {
+        o.status = "paid";
+        o.txHash = match.txHash;
+        o.paidAt = Date.now();
+        console.log(`[ORDER PAID] ${o.id} -> ${o.asset} ${o.amount}`);
+      }
+      return res.json({ ok: true });
+    } catch (e) {
+      console.error("[HOOK] handler error:", e);
+      return res.status(500).send("hook error");
     }
   }
-
-  return res.status(200).send("ok");
-});
+);
 
 /* ========= Start ========= */
 app.listen(PORT, () => {
@@ -202,4 +188,5 @@ app.listen(PORT, () => {
   console.log("ACCEPT_TOKENS =", ACCEPT_TOKENS.join(", "));
   console.log("MIN_CONF =", MIN_CONFIRMATIONS, "ORDER_TTL_MIN =", ORDER_TTL_MIN);
 });
+
 
