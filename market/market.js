@@ -1,4 +1,5 @@
 'use strict';
+let orderViewTTLTmr = null;
 
 const BACKEND_BASE   = 'https://x5capital.onrender.com';
 const RECEIVING_ADDR = '0x9c7291a52e4653a5c0501ea999e5e3fca41a1471';
@@ -13,6 +14,11 @@ function toUnits(amount, decimals){
   const [i,f=''] = String(amount).split('.');
   const padded = (f + '0'.repeat(decimals)).slice(0,decimals);
   return BigInt(i + padded);
+}
+function toMs(x) {
+  if (x == null) return undefined;
+  const n = Number(x);
+  return n < 1e12 ? n * 1000 : n;
 }
 
 /* ---- 統一的 JSON 取用（加 ngrok 繞過） ---- */
@@ -126,7 +132,11 @@ const pollMap = new Map();
 function asStatus(v){ return v==null?'':String(v).toLowerCase(); }
 function normalizeOrderStatus(o){
   if(!o) return false;
-  if(asStatus(o.status)==='pending' && o.expiresAt && Date.now()>o.expiresAt){ o.status='expired'; return true; }
+  const exp = toMs(o.expiresAt);
+  if(asStatus(o.status)==='pending' && exp && Date.now()>exp){
+    o.status='expired';
+    return true;
+  }
   return false;
 }
 function normalizeAllOrders(){ let ch=false; for(const o of ordersLocal){ if(normalizeOrderStatus(o)) ch=true; } if(ch) saveLocalOrders(); }
@@ -159,8 +169,6 @@ function renderOrdersDrawer(){
   }).join('');
 }
 
-/* ====== 後端 API （統一） ====== */
-// 以 ID 取單（單一版本、同時同步到本地）
 async function getOrder(id){
   const data = await fetchJSON(`${BACKEND_BASE}/orders/${encodeURIComponent(id)}?t=${Date.now()}`, {
     method:'GET',
@@ -170,7 +178,9 @@ async function getOrder(id){
   if(o && o.id){
     upsertLocalOrder({
       id:o.id, status:o.status, asset:o.asset, amount:o.amount,
-      expiresAt:o.expiresAt, txHash:o.txHash, network:o.network
+      // 標準化為 ms
+      expiresAt: toMs(o.expiresAt),
+      txHash:o.txHash, network:o.network
     });
   }
   return o;
@@ -234,7 +244,7 @@ function startPolling(orderId){
         showToast(st==='expired'?'訂單已逾時':'訂單已取消'); const pm=$('#payMask'); if(pm) pm.style.display='none';
         isCheckingOut=false; const cb=$('#checkoutBtn'); if(cb) cb.disabled=false; return;
       }
-      if(st==='pending' && normalizeOrderStatus({status:st,expiresAt:o.expiresAt})){
+      if(st==='pending' && normalizeOrderStatus({status:st, expiresAt: toMs(o.expiresAt)})){
         upsertLocalOrder({ id:o.id, status:'expired' });
         clearInterval(it); pollMap.delete(orderId);
         showToast('訂單已逾時'); const pm=$('#payMask'); if(pm) pm.style.display='none';
@@ -279,7 +289,8 @@ function updateOrderViewUI(order){
     }
   }
   if(order.expiresAt){
-    $('#orderViewExpireAt').textContent=Math.max(0,Math.floor((order.expiresAt-Date.now())/1000))+' 秒';
+  const left = Math.max(0, Math.floor((toMs(order.expiresAt) - Date.now())/1000));
+  $('#orderViewExpireAt').textContent = left + ' 秒';
   }
 }
 
@@ -287,9 +298,29 @@ function openOrderView(o){
   const m=$('#orderViewMask');
   if(m){ m.style.display='grid'; m.dataset.id=o.id; }
   updateOrderViewUI(o);
+
+  // 啟動詳情頁的倒數
+  clearInterval(orderViewTTLTmr);
+  const exp = toMs(o.expiresAt);
+  if(exp){
+    orderViewTTLTmr = setInterval(()=>{
+      const left = Math.max(0, exp - Date.now());
+      const s = Math.floor(left/1000);
+      const el = $('#orderViewExpireAt');
+      if(el) el.textContent = s + ' 秒';
+      if(left<=0) clearInterval(orderViewTTLTmr);
+    }, 1000);
+  } else {
+    const el = $('#orderViewExpireAt');
+    if(el) el.textContent = '-';
+  }
 }
 
-function closeOrderView(){ const m=$('#orderViewMask'); if(m) m.style.display='none'; }
+function closeOrderView(){
+  const m=$('#orderViewMask');
+  if(m) m.style.display='none';
+  clearInterval(orderViewTTLTmr);
+}
 
 document.addEventListener('click', async (e)=>{
   const t = e.target;
@@ -457,7 +488,7 @@ btn=$('#checkoutBtn'); if(btn) btn.addEventListener('click', ()=>{
 
   createOrder(orderId, asset, amount).then(resp=>{
     const order = resp.order || { id:orderId, createdAt:Date.now(), expiresAt: Date.now()+15*60*1000, status:'pending' };
-    lastOrderId = order.id;
+    order.expiresAt = toMs(order.expiresAt) ?? (Date.now()+15*60*1000);
 
     // 本地訂單
     upsertLocalOrder({ id:order.id, asset, amount, status:asStatus(order.status||'pending'),
@@ -502,6 +533,7 @@ window.__market_boot = function(){
 if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', window.__market_boot, {once:true}); } else { window.__market_boot(); }
 
 console.log('[market] market.js ready');
+
 
 
 
