@@ -176,12 +176,13 @@ async function getOrder(id){
   });
   const o = data.order ?? data;
   if(o && o.id){
-    upsertLocalOrder({
-      id:o.id, status:o.status, asset:o.asset, amount:o.amount,
-      // 標準化為 ms
-      expiresAt: toMs(o.expiresAt),
-      txHash:o.txHash, network:o.network
-    });
+upsertLocalOrder({
+  id: o.id,
+  status: st,
+  expiresAt: toMs(o.expiresAt),   // ← 統一轉成毫秒
+  txHash: o.txHash,
+  network: o.network
+});
   }
   return o;
 }
@@ -394,7 +395,7 @@ document.addEventListener('click', async (e)=>{
 
       const pm = $('#payMask'); if (pm) pm.style.display='grid';
       startPolling(o.id);
-      startTTLCountdown(o.expiresAt || (Date.now()+15*60*1000));
+      startTTLCountdown(toMs(o.expiresAt) || (Date.now()+15*60*1000));
     } catch {
       showToast('開啟付款失敗');
     }
@@ -533,6 +534,7 @@ window.__market_boot = function(){
 if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', window.__market_boot, {once:true}); } else { window.__market_boot(); }
 
 console.log('[market] market.js ready');
+
 
 
 
