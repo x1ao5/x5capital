@@ -30,7 +30,7 @@ async function fetchJSON(url, opt={}) {
     ...opt,
     headers:{ ...(opt.headers||{}), ...NGROK_BYPASS_HEADER }
   });
-  const ct  = r.headers.get('content-type')||'';
+  const ct  = r.headers.get('content-type')||'';  // 某些 proxy 會把 404 回傳 HTML，要自己擋
   const txt = await r.text();
   if(!r.ok) throw new Error(`HTTP ${r.status}: ${txt.slice(0,120)}`);
   if(!/json/i.test(ct)) throw new Error('Not JSON: ' + txt.slice(0,120));
@@ -177,11 +177,11 @@ async function getOrder(id){
 
   const o = data.order ?? data;
   if (o && o.id) {
-    const st = asStatus(o.status); // ← 補上這行，正確取得狀態
+    const st = asStatus(o.status);
     upsertLocalOrder({
       id: o.id,
       status: st,
-      expiresAt: toMs(o.expiresAt),   // 統一轉毫秒，倒數才會動
+      expiresAt: toMs(o.expiresAt),
       txHash: o.txHash,
       network: o.network,
       amount: o.amount,
@@ -191,7 +191,7 @@ async function getOrder(id){
   return o;
 }
 
-// 建單（命名與呼叫一致）
+// 建單
 async function createOrder(orderId, asset, amount){
   const data = await fetchJSON(`${BACKEND_BASE}/orders`, {
     method:'POST',
@@ -256,7 +256,7 @@ function startPolling(orderId){
         isCheckingOut=false; const cb=$('#checkoutBtn'); if(cb) cb.disabled=false;
       }
     }catch(err){
-      console.warn('[poll] getOrder error:', err.message); // 不是致命，繼續輪詢
+      console.warn('[poll] getOrder error:', err.message);
     }
   }, 2500);
   pollMap.set(orderId, it);
@@ -272,7 +272,7 @@ function startTTLCountdown(expiresAt){
   },1000);
 }
 
-/* ====== 訂單詳情彈窗（只有一份的 UI 更新） ====== */
+/* ====== 訂單詳情彈窗 ====== */
 function updateOrderViewUI(order){
   if(!order) return;
   const st = asStatus(order.status||'pending');
@@ -294,17 +294,15 @@ function updateOrderViewUI(order){
     }
   }
   if(order.expiresAt){
-  const left = Math.max(0, Math.floor((toMs(order.expiresAt) - Date.now())/1000));
-  $('#orderViewExpireAt').textContent = left + ' 秒';
+    const left = Math.max(0, Math.floor((toMs(order.expiresAt) - Date.now())/1000));
+    $('#orderViewExpireAt').textContent = left + ' 秒';
   }
 }
-
 function openOrderView(o){
   const m=$('#orderViewMask');
   if(m){ m.style.display='grid'; m.dataset.id=o.id; }
   updateOrderViewUI(o);
 
-  // 啟動詳情頁的倒數
   clearInterval(orderViewTTLTmr);
   const exp = toMs(o.expiresAt);
   if(exp){
@@ -320,24 +318,21 @@ function openOrderView(o){
     if(el) el.textContent = '-';
   }
 }
-
 function closeOrderView(){
   const m=$('#orderViewMask');
   if(m) m.style.display='none';
   clearInterval(orderViewTTLTmr);
 }
 
+/* ====== 事件綁定 ====== */
 document.addEventListener('click', async (e)=>{
   const t = e.target;
 
-  /* ---------- 商品卡：加入購物車 ---------- */
+  // 商品卡：加入購物車
   const addId = t.closest('[data-add]')?.getAttribute('data-add');
-  if (addId) {
-    addToCart(addId);
-    return;
-  }
+  if (addId) { addToCart(addId); return; }
 
-  /* ---------- 購物車：數量 +1/-1、移除 ---------- */
+  // 購物車：數量 +1/-1/移除
   const incId = t.closest('[data-inc]')?.getAttribute('data-inc');
   if (incId) {
     const it = cart.find(x=>x.id===incId);
@@ -352,45 +347,30 @@ document.addEventListener('click', async (e)=>{
   const decId = t.closest('[data-dec]')?.getAttribute('data-dec');
   if (decId) {
     const it = cart.find(x=>x.id===decId);
-    if (it) {
-      it.qty = Math.max(1, it.qty-1);
-      saveCart(); renderCart();
-    }
+    if (it) { it.qty = Math.max(1, it.qty-1); saveCart(); renderCart(); }
     return;
   }
   const delId = t.closest('[data-del]')?.getAttribute('data-del');
-  if (delId) {
-    cart = cart.filter(x=>x.id!==delId);
-    saveCart(); updateCartBadge(); renderCart();
-    return;
-  }
+  if (delId) { cart = cart.filter(x=>x.id!==delId); saveCart(); updateCartBadge(); renderCart(); return; }
 
-  /* ---------- 訂單抽屜：查看 ---------- */
+  // 訂單抽屜：查看
   const viewId = t.closest('[data-order-view]')?.getAttribute('data-order-view');
   if (viewId) {
     try {
-      const o = await getOrder(viewId); // 後端→本地同步
-      if (o) {
-        updateOrderViewUI(o);
-        openOrderView(o);               // 這裡會把 modal.dataset.id 設成 o.id
-      }
-    } catch {
-      showToast('查詢失敗');
-    }
+      const o = await getOrder(viewId);
+      if (o) { updateOrderViewUI(o); openOrderView(o); }
+    } catch { showToast('查詢失敗'); }
     return;
   }
 
-  /* ---------- 訂單抽屜：重新開啟付款（pending） ---------- */
+  // 訂單抽屜：重新開啟付款（pending）
   const reopenId = t.closest('[data-order-reopen]')?.getAttribute('data-order-reopen');
   if (reopenId) {
     try {
       const o = await getOrder(reopenId);
       if (!o) return;
-      if (asStatus(o.status)!=='pending') {
-        showToast('此訂單已不是待付款狀態'); return;
-      }
+      if (asStatus(o.status)!=='pending') { showToast('此訂單已不是待付款狀態'); return; }
 
-      // 準備付款彈窗
       lastOrderId = o.id;
       $('#orderIdText')   && ($('#orderIdText').textContent=o.id);
       $('#payAmountText') && ($('#payAmountText').textContent=`${o.amount} ${o.asset||''}`);
@@ -400,23 +380,20 @@ document.addEventListener('click', async (e)=>{
       const pm = $('#payMask'); if (pm) pm.style.display='grid';
       startPolling(o.id);
       startTTLCountdown(toMs(o.expiresAt) || (Date.now()+15*60*1000));
-    } catch {
-      showToast('開啟付款失敗');
-    }
+    } catch { showToast('開啟付款失敗'); }
     return;
   }
 
-  /* ---------- 訂單抽屜：取消 ---------- */
+  // 訂單抽屜：取消
   const cancelId = t.closest('[data-order-cancel]')?.getAttribute('data-order-cancel');
   if (cancelId) {
     await cancelOrder(cancelId);
     upsertLocalOrder({ id:cancelId, status:'cancelled' });
-    renderOrdersDrawer(); updateOrdersBadge();
-    showToast('已取消訂單');
+    renderOrdersDrawer(); updateOrdersBadge(); showToast('已取消訂單');
     return;
   }
 
-  /* ---------- 訂單詳情：重新整理 ---------- */
+  // 訂單詳情：重新整理
   if (t.id === 'ovRefresh') {
     const modal = $('#orderViewMask');
     const id = modal?.dataset?.id;
@@ -424,22 +401,18 @@ document.addEventListener('click', async (e)=>{
     try {
       const o = await getOrder(id);
       if (o) { updateOrderViewUI(o); showToast('已刷新'); }
-    } catch {
-      showToast('查詢失敗');
-    }
+    } catch { showToast('查詢失敗'); }
     return;
   }
 
-  /* ---------- 訂單詳情：關閉 ---------- */
-  if (t.id==='closeOrderView' || t.id==='orderViewMask') {
-    closeOrderView(); return;
-  }
+  // 訂單詳情：關閉
+  if (t.id==='closeOrderView' || t.id==='orderViewMask') { closeOrderView(); return; }
 });
 
-/* Esc 關閉 */
+// Esc 關閉
 document.addEventListener('keydown', (e)=>{ if(e.key==='Escape'){ closeOrderView(); const pm=$('#payMask'); if(pm) pm.style.display='none'; }});
 
-/* ====== 額外綁定 ====== */
+// 額外綁定
 let btn;
 btn=$('#cartBtn');     if(btn) btn.addEventListener('click', ()=>openCart(true));
 btn=$('#closeCart');   if(btn) btn.addEventListener('click', ()=>openCart(false));
@@ -455,11 +428,10 @@ btn=$('#copyAddr'); if(btn) btn.addEventListener('click', ()=>{ try{ navigator.c
 btn=$('#confirmPaid'); if(btn) btn.addEventListener('click', async ()=>{
   if(!lastOrderId) return;
   try{
-    // 沒有也沒關係：這只是「通知」後端，可忽略錯誤
+    // 只是通知後端，可忽略錯誤
     await fetch(`${BACKEND_BASE}/orders/${encodeURIComponent(lastOrderId)}/confirm`, { method:'POST', mode:'cors', cache:'no-store', headers:NGROK_BYPASS_HEADER })
-      .catch(()=>{ /* ignore */ });
+      .catch(()=>{});
 
-    // 立即拉一次單 & 讓輪詢繼續跑
     const o=await getOrder(lastOrderId);
     if(o){ updateOrderViewUI(o); }
     showToast('我們已收到確認，等待鏈上確認');
@@ -480,7 +452,7 @@ btn=$('#cancelOrder'); if(btn) btn.addEventListener('click', async ()=>{
 });
 btn=$('#closePay'); if(btn) btn.addEventListener('click', ()=>{ const pm=$('#payMask'); if(pm) pm.style.display='none'; isCheckingOut=false; const cb=$('#checkoutBtn'); if(cb) cb.disabled=false; });
 
-/* ====== CHECKOUT ====== */
+// CHECKOUT
 btn=$('#checkoutBtn'); if(btn) btn.addEventListener('click', ()=>{
   if(isCheckingOut) return;
   if(cart.length===0){ showToast('購物車是空的'); return; }
@@ -538,9 +510,3 @@ window.__market_boot = function(){
 if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', window.__market_boot, {once:true}); } else { window.__market_boot(); }
 
 console.log('[market] market.js ready');
-
-
-
-
-
-
