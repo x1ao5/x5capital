@@ -174,15 +174,19 @@ async function getOrder(id){
     method:'GET',
     mode:'cors'
   });
+
   const o = data.order ?? data;
-  if(o && o.id){
-upsertLocalOrder({
-  id: o.id,
-  status: st,
-  expiresAt: toMs(o.expiresAt),   // ← 統一轉成毫秒
-  txHash: o.txHash,
-  network: o.network
-});
+  if (o && o.id) {
+    const st = asStatus(o.status); // ← 補上這行，正確取得狀態
+    upsertLocalOrder({
+      id: o.id,
+      status: st,
+      expiresAt: toMs(o.expiresAt),   // 統一轉毫秒，倒數才會動
+      txHash: o.txHash,
+      network: o.network,
+      amount: o.amount,
+      asset:  o.asset
+    });
   }
   return o;
 }
@@ -534,6 +538,7 @@ window.__market_boot = function(){
 if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', window.__market_boot, {once:true}); } else { window.__market_boot(); }
 
 console.log('[market] market.js ready');
+
 
 
 
