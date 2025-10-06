@@ -157,11 +157,14 @@ itemsTbody.onclick = async (e) => {
   }
 };
 
-// 表單：upsert
+// 表單：upsert（修：正確宣告 id 與 sku，移除多餘括號）
 document.getElementById('submitItem').onclick = async ()=>{
+  const id  = document.getElementById('f_id').value.trim();
+  const sku = (document.getElementById('f_sku').value || id).trim();
+
   const body = {
-    id: document.getElementById('f_id').value.trim(),
-    sku: document.getElementById('f_sku').value || id).trim(),
+    id,
+    sku, // ← 把 sku 一起送；後端沒填會 fallback = id
     title: document.getElementById('f_title').value.trim(),
     description: document.getElementById('f_desc').value.trim(),
     category: document.getElementById('f_category').value.trim() || null,
@@ -182,14 +185,16 @@ document.getElementById('submitItem').onclick = async ()=>{
 };
 document.getElementById('resetForm').onclick = ()=>{
   document.getElementById('formTitle').textContent = '新增 / 編輯商品';
-  ['f_id','f_title','f_desc','f_category','f_price','f_stock','f_img','f_sort'].forEach(id=>document.getElementById(id).value='');
+  ['f_id','f_sku','f_title','f_desc','f_category','f_price','f_stock','f_img','f_sort']
+    .forEach(i=>document.getElementById(i).value='');
   msg(document.getElementById('formMsg'),'');
 };
 
 // 匯出 / 匯入
 document.getElementById('exportItems').onclick = ()=>{
   const arr = ITEMS.map(it => ({
-    id: it.id, title: it.title, description: it.description || '',
+    id: it.id, sku: it.sku || it.id,
+    title: it.title, description: it.description || '',
     category: it.category || null, price: Number(it.price||0), stock: Number(it.stock||0),
     img: it.img || null, sortOrder: it.sort_order ?? null
   }));
