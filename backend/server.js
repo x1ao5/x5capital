@@ -1,4 +1,4 @@
-// server.js — ESM 版（適用 package.json 有 "type":"module"）
+// server.js — ESM 版
 import 'dotenv/config';
 import express from 'express';
 import crypto from 'crypto';
@@ -8,18 +8,18 @@ import { Pool } from 'pg';
 const app  = express();
 const PORT = process.env.PORT || 10000;
 
-// ---- CORS/JSON：webhook 要 raw body 驗簽，所以只對非 webhook 路徑套 JSON ----
+// ========== Middleware（Webhook 要 raw body，其他走 JSON） ==========
 app.use((req, res, next) => {
   res.setHeader('ngrok-skip-browser-warning', 'true');
   next();
 });
 app.use(cors({ origin: '*' }));
 app.use((req, res, next) => {
-  if (req.path.startsWith('/webhook')) return next(); // 留給 raw-body
+  if (req.path.startsWith('/webhook')) return next(); // 保留 raw body
   express.json({ limit: '1mb' })(req, res, next);
 });
 
-// ---- Postgres ----
+// ========== Postgres ==========
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
@@ -31,13 +31,15 @@ async function withTx(fn) {
   finally { c.release(); }
 }
 
-// ---- 常數 ----
+// ========== 常數 ==========
 const RECEIVING_ADDR = (process.env.RECEIVING_ADDR || '').toLowerCase();
 const MIN_CONF       = Number(process.env.MIN_CONFIRMATIONS || 0);
 const ORDER_TTL_MIN  = Number(process.env.ORDER_TTL_MIN || 15);
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || '';
 
-// ================== Items（庫存） ==================
+// ===================================================================
+// Items（商品/庫存）
+// ===================================================================
 app.get('/items', async (req, res) => {
   const r = await pool.query(
     `SELECT id, title, description, category, price, stock, img, sort_order
@@ -93,10 +95,10 @@ app.post('/items/:id/set-stock', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// ================== Orders（訂單） ==================
+// ===================================================================
+// Orders（訂單）
+// ===================================================================
 app.post('/orders', async (req, res, next) => {
-  // server.js -> app.post('/orders', ...)
-  console.log('[ORDERS] created', id, asset, amount);  // 這行是新增的
   const { id, asset = 'USDT', amount = 0, items = [] } = req.body || {};
   if (!id) return res.status(400).json({ error: 'id required' });
 
@@ -112,6 +114,7 @@ app.post('/orders', async (req, res, next) => {
         [id, asset, amount, now, exp]
       );
 
+      // 如果前端有帶購物車明細，這裡會扣庫存＋寫入 order_items
       if (Array.isArray(items) && items.length > 0) {
         for (const it of items) {
           const itemId = it.id, qty = Number(it.qty || 0);
@@ -138,6 +141,7 @@ app.post('/orders', async (req, res, next) => {
       return r.rows[0];
     });
 
+    console.log('[ORDERS] created', id, asset, amount);
     res.json({ order });
   } catch (e) { next(e); }
 });
@@ -165,7 +169,7 @@ app.post('/orders/:id/cancel', async (req, res, next) => {
       for (const it of items.rows) {
         await c.query(`UPDATE items SET stock = stock + $2 WHERE id=$1`, [it.item_id, it.qty]);
       }
-      await c.query(`UPDATE orders SET status='cancelled', cancelled_at=NOW() WHERE id=$1`, [id]);
+      await c.query(`UPDATE orders SET status='cancelled', cancelled_at=NOW(), updated_at=NOW() WHERE id=$1`, [id]);
 
       const r = await c.query(
         `SELECT id, asset, amount, status, expires_at AS "expiresAt", tx_hash AS "txHash", network
@@ -182,7 +186,9 @@ app.post('/orders/:id/confirm', async (req, res) => {
   res.json({ ok: true }); // 真正入帳靠 webhook
 });
 
-// ================== Webhook（Alchemy） ==================
+// ===================================================================
+// Webhook（Alchemy）
+// ===================================================================
 app.post('/webhook/alchemy', express.raw({ type: 'application/json' }), async (req, res) => {
   try {
     const raw  = req.body; // Buffer
@@ -201,7 +207,7 @@ app.post('/webhook/alchemy', express.raw({ type: 'application/json' }), async (r
       if (confs < MIN_CONF) continue;
 
       const tokenAddr = (a.rawContract?.address || '').toLowerCase();
-      const isUSDT    = tokenAddr === '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9';
+      const isUSDT    = tokenAddr === '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9'; // USDT (Arbitrum One)
       const isETH     = !tokenAddr || tokenAddr === '0x0000000000000000000000000000000000000000';
 
       let amountStr = '0';
@@ -214,7 +220,7 @@ app.post('/webhook/alchemy', express.raw({ type: 'application/json' }), async (r
       const network = (payload?.event?.network || '').toUpperCase();
 
       const updated = await withTx(async (c) => {
-        // 先精確相等
+        // 1) 精確相等
         let q = await c.query(
           `SELECT id FROM orders
             WHERE status='pending' AND asset=$1 AND amount::numeric = $2::numeric
@@ -223,7 +229,7 @@ app.post('/webhook/alchemy', express.raw({ type: 'application/json' }), async (r
             LIMIT 1 FOR UPDATE`,
           [asset, amountStr]
         );
-        // 再試四捨五入到 2 位
+        // 2) 四捨五入到 2 位
         if (q.rowCount === 0) {
           q = await c.query(
             `SELECT id FROM orders
@@ -235,7 +241,7 @@ app.post('/webhook/alchemy', express.raw({ type: 'application/json' }), async (r
             [asset, amountStr]
           );
         }
-        // 最後用 ±0.01 容差
+        // 3) 容差 ±0.01
         if (q.rowCount === 0) {
           q = await c.query(
             `SELECT id FROM orders
@@ -270,7 +276,17 @@ app.post('/webhook/alchemy', express.raw({ type: 'application/json' }), async (r
   }
 });
 
-// ================== misc ==================
+// ===================================================================
+// Debug / Misc
+// ===================================================================
+app.get('/orders/debug-latest', async (req, res) => {
+  const r = await pool.query(
+    `SELECT id, asset, amount, status, expires_at, created_at
+     FROM orders ORDER BY created_at DESC LIMIT 10`
+  );
+  res.json(r.rows);
+});
+
 app.get('/', (_, res) => res.send('x5 backend live'));
 app.use((err, req, res, next) => {
   console.error(err);
@@ -278,5 +294,3 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => console.log('listening on', PORT));
-
-
