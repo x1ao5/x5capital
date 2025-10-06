@@ -1,207 +1,262 @@
-// server.js  —— X5 backend (Render friendly, with rich logs)
+// server.js — DB 版
+require('dotenv').config();
+const express = require('express');
+const crypto  = require('crypto');
+const cors    = require('cors');
+const bodyParser = require('body-parser');
+const { Pool } = require('pg');
 
-import 'dotenv/config.js';
-import express from 'express';
-import cors from 'cors';
-import crypto from 'crypto';
-// === PostgreSQL 連線設定（貼在 server.js 的 import 區域）===
-import pkg from 'pg';
-const { Pool } = pkg;
+const app  = express();
+const PORT = process.env.PORT || 10000;
 
-export const db = new Pool({
-  connectionString: process.env.DATABASE_URL,   // .env 裡的 DATABASE_URL
-  ssl: { rejectUnauthorized: false }            // Render Postgres 需開 SSL
+// ---- CORS/JSON 注意：webhook 需要 raw body 驗簽，所以只對其它路徑用 JSON ----
+app.use((req,res,next)=>{
+  res.setHeader('ngrok-skip-browser-warning','true');
+  next();
+});
+app.use(cors({ origin: '*'}));
+app.use((req,res,next)=>{
+  if (req.path.startsWith('/webhook')) return next(); // 留給 raw-body
+  bodyParser.json({ limit:'1mb' })(req,res,next);
 });
 
-// 啟動時測試連線一次（可留可刪）
-db.query('SELECT NOW() AS now')
-  .then(r => console.log('✅ DB ok at', r.rows[0].now))
-  .catch(err => console.error('❌ DB connect error:', err));
+// ---- Postgres ----
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized:false } : false
+});
+async function withTx(fn){
+  const c = await pool.connect();
+  try { await c.query('BEGIN'); const r = await fn(c); await c.query('COMMIT'); return r; }
+  catch(err){ await c.query('ROLLBACK'); throw err; }
+  finally{ c.release(); }
+}
 
-const PORT              = process.env.PORT || 10000;
-const RECEIVING_ADDR    = (process.env.RECEIVING_ADDR || '').toLowerCase();
-const WEBHOOK_SECRET    = process.env.WEBHOOK_SECRET || '';
-const ACCEPT_TOKENS     = process.env.ACCEPT_TOKENS || 'NATIVE:eth,ERC20:usdt';
-const MIN_CONFIRMATIONS = Number(process.env.MIN_CONFIRMATIONS || '0');
-const ORDER_TTL_MIN     = Math.max(1, Number(process.env.ORDER_TTL_MIN || '15')); // 最少 1 分鐘
+// ---- 參數/常數 ----
+const RECEIVING_ADDR = (process.env.RECEIVING_ADDR || '').toLowerCase();
+const MIN_CONF       = Number(process.env.MIN_CONFIRMATIONS || 0);
+const ORDER_TTL_MIN  = Number(process.env.ORDER_TTL_MIN || 15);
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || ''; // Alchemy Signing Key
 
-// ──────────────────────────────────────────────────────────────────────────────
-// 小工具
-// ──────────────────────────────────────────────────────────────────────────────
-const nowSec = () => Math.floor(Date.now() / 1000);
-const ttlSec = ORDER_TTL_MIN * 60;
-const ok  = (res, data) => res.json(data);
-const err = (res, code, message) => res.status(code).json({ error: message });
+// ====== Items（庫存管理）======
+// 取得全部商品（前台或後台都可用）
+app.get('/items', async (req,res)=>{
+  const r = await pool.query(
+    `SELECT id, title, description, category, price, stock, img, sort_order
+     FROM items ORDER BY sort_order NULLS LAST, id`
+  );
+  res.json({ items: r.rows });
+});
 
-const tag = (t, ...msg) => console.log(`[${t}]`, ...msg);
+// 新增/更新商品（補登資料或改價、改圖）
+app.post('/items/upsert', async (req,res,next)=>{
+  try{
+    const { id, title, description='', category=null, price=0, stock=0, img=null, sortOrder=null } = req.body||{};
+    if(!id || !title) return res.status(400).json({ error:'id/title required' });
 
-// In-memory 訂單（Render Free 會睡覺，僅用於展示）
-const Orders = new Map();
+    const q = `
+      INSERT INTO items (id,title,description,category,price,stock,img,sort_order)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      ON CONFLICT (id) DO UPDATE
+        SET title=EXCLUDED.title,
+            description=EXCLUDED.description,
+            category=EXCLUDED.category,
+            price=EXCLUDED.price,
+            stock=EXCLUDED.stock,
+            img=EXCLUDED.img,
+            sort_order=EXCLUDED.sort_order
+      RETURNING *`;
+    const r = await pool.query(q,[id,title,description,category,price,stock,img,sortOrder]);
+    res.json({ item:r.rows[0] });
+  }catch(e){ next(e); }
+});
 
-// 讀取最新 pending 訂單（你要更精準對單時，可改用 id 或 amount 比對）
-const latestPending = () => {
-  const arr = [...Orders.values()].filter(o => o.status === 'pending');
-  arr.sort((a,b) => b.createdAt - a.createdAt);
-  return arr[0] || null;
-};
+// 調整庫存（補貨/減庫存）：delta 可正可負，最少 0
+app.post('/items/:id/adjust', async (req,res,next)=>{
+  try{
+    const id    = req.params.id;
+    const delta = Number(req.body?.delta||0);
+    const r = await pool.query(
+      `UPDATE items SET stock = GREATEST(0, stock + $2) WHERE id=$1 RETURNING *`,
+      [id, delta]
+    );
+    if (r.rowCount===0) return res.status(404).json({ error:'item not found' });
+    res.json({ item:r.rows[0] });
+  }catch(e){ next(e); }
+});
 
-// 過期檢查（每次 API 讀取/建立時都會順手處理）
-const sweepExpired = () => {
-  const now = nowSec();
-  for (const o of Orders.values()) {
-    if (o.status === 'pending' && o.expiresAt <= now) {
-      o.status = 'expired';
-    }
-  }
-};
+// 直接設定庫存為某值
+app.post('/items/:id/set-stock', async (req,res,next)=>{
+  try{
+    const id    = req.params.id;
+    const stock = Math.max(0, Number(req.body?.stock||0));
+    const r = await pool.query(
+      `UPDATE items SET stock = $2 WHERE id=$1 RETURNING *`,
+      [id, stock]
+    );
+    if (r.rowCount===0) return res.status(404).json({ error:'item not found' });
+    res.json({ item:r.rows[0] });
+  }catch(e){ next(e); }
+});
 
-// ──────────────────────────────────────────────────────────────────────────────
-// ！！！一定要在任何 JSON 解析前，放原始 body 的 webhook route！！！
-// ──────────────────────────────────────────────────────────────────────────────
-const app = express();
+// ====== Orders（訂單）======
+// 建單：可只傳 {id, asset, amount}（維持前端相容），也可加 items:[{id,qty},...]
+// 若帶 items，會檢查庫存並扣減
+app.post('/orders', async (req,res,next)=>{
+  const { id, asset='USDT', amount=0, items=[] } = req.body||{};
+  if(!id) return res.status(400).json({ error:'id required' });
 
-app.post('/webhook/alchemy', express.raw({ type: '*/*' }), (req, res) => {
-  try {
-    // 驗簽
-    const sigHeader = req.get('x-alchemy-signature') || '';
-    const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body);
-    const digest = crypto.createHmac('sha256', WEBHOOK_SECRET).update(raw).digest('hex');
-    const isMatch = (sigHeader === digest || sigHeader === `sha256=${digest}`);
-    tag('HOOK HIT', req.method, req.url, 'sigOK=', isMatch);
+  try{
+    const now = new Date();
+    const exp = new Date(now.getTime() + ORDER_TTL_MIN*60000);
 
-    if (!isMatch) {
-      tag('HOOK', 'invalid signature');
-      return res.status(401).send('invalid signature');
-    }
+    const order = await withTx(async (c)=>{
+      // 1) 新建訂單（若已存在就直接回舊資料）
+      const ins = await c.query(
+        `INSERT INTO orders (id, asset, amount, status, created_at, expires_at)
+         VALUES ($1,$2,$3,'pending',$4,$5)
+         ON CONFLICT (id) DO NOTHING`,
+        [id, asset, amount, now, exp]
+      );
 
-    const payload = JSON.parse(raw.toString('utf8'));
-    const evt  = payload?.event || {};
-    const acts = evt.activity || evt.activities || [];
+      // 2) 若有 items：確認庫存、扣庫存、寫入 order_items
+      if (Array.isArray(items) && items.length>0){
+        for (const it of items){
+          const itemId = it.id, qty = Number(it.qty||0);
+          if (!itemId || qty<=0) continue;
 
-    // 紀錄一份漂亮的摘要，方便你在 Render Logs 觀察
-    tag('HOOK OK', {
-      network   : evt.network || evt.eventNetwork || 'unknown',
-      type      : evt.eventType || 'unknown',
-      activities: acts.length
-    });
+          // 鎖定該商品的列，避免超賣
+          const row = await c.query(`SELECT stock FROM items WHERE id=$1 FOR UPDATE`, [itemId]);
+          if (row.rowCount===0) throw new Error(`item not found: ${itemId}`);
+          const stock = row.rows[0].stock;
+          if (stock < qty) throw new Error(`insufficient stock for ${itemId}`);
 
-    // 嘗試逐筆活動比對
-    for (const a of acts) {
-      const to        = (a?.toAddress || a?.to || '').toLowerCase();
-      const decimals  = Number(a?.decimals ?? 6);
-      const valueRaw  = Number(a?.value ?? a?.amount ?? 0);
-      const amount    = valueRaw / Math.pow(10, isFinite(decimals) ? decimals : 6);
-      const confs     = Number(a?.confirmations ?? 0);
-      const txHash    = a?.hash || a?.txHash || a?.transactionHash || '';
-      const tokenAddr = (a?.rawContract?.address || a?.contractAddress || '').toLowerCase();
-
-      // 只處理匯入到我們的收款地址 + 確認數符合 + 有金額
-      if (to === RECEIVING_ADDR && confs >= MIN_CONFIRMATIONS && amount > 0) {
-        const p = latestPending();
-
-        // 你想要更嚴格對單，可改成：p && Math.abs(p.amount - amount) < 1e-9
-        if (p) {
-          p.status  = 'paid';
-          p.paidAt  = nowSec();
-          p.txHash  = txHash;
-          p.token   = tokenAddr;
-          tag('ORDER', `auto match -> ${p.id} set to PAID (amount=${amount}, confs=${confs}, tx=${txHash})`);
-        } else {
-          tag('ORDER', 'no pending order to match, skip');
+          await c.query(`UPDATE items SET stock = stock - $2 WHERE id=$1`, [itemId, qty]);
+          await c.query(
+            `INSERT INTO order_items (order_id, item_id, qty) VALUES ($1,$2,$3)
+             ON CONFLICT (order_id,item_id) DO UPDATE SET qty = order_items.qty + EXCLUDED.qty`,
+            [id, itemId, qty]
+          );
         }
       }
-    }
 
-    return res.status(200).send('ok');
-  } catch (e) {
-    console.error('[HOOK ERROR]', e);
-    return res.status(500).send('error');
-  }
-});
+      const r = await c.query(`SELECT id, asset, amount, status, expires_at AS "expiresAt", tx_hash AS "txHash", network
+                               FROM orders WHERE id=$1`, [id]);
+      return r.rows[0];
+    });
 
-// ──────────────────────────────────────────────────────────────────────────────
-// 其餘中介與 API
-// ──────────────────────────────────────────────────────────────────────────────
-app.use(cors({ origin: true, credentials: true }));
-app.use(express.json());
-
-// 健康檢查
-app.get('/health', (req, res) => res.status(200).send('ok'));
-
-// 安全環境檢視（不返回敏感值）
-app.get('/env', (req, res) => {
-  res.json({
-    PORT: String(PORT),
-    RECEIVING_ADDR,
-    ACCEPT_TOKENS,
-    MIN_CONFIRMATIONS,
-    ORDER_TTL_MIN,
-    has_WEBHOOK_SECRET: WEBHOOK_SECRET ? true : false
-  });
-});
-
-// 建立訂單
-app.post('/orders', (req, res) => {
-  sweepExpired();
-  const { id, asset, amount } = req.body || {};
-  if (!id)     return err(res, 400, 'id required');
-  if (!asset)  return err(res, 400, 'asset required');
-  if (!amount) return err(res, 400, 'amount required');
-
-  const exists = Orders.get(id);
-  if (exists) return ok(res, exists);
-
-  const now = nowSec();
-  const order = {
-    id,
-    asset,
-    amount: Number(amount),
-    status: 'pending',
-    createdAt: now,
-    expiresAt: now + ttlSec,
-    txHash: null
-  };
-  Orders.set(order.id, order);
-  tag('ORDERS API', 'POST /orders -> ok', order.id, asset, amount);
-  return ok(res, order);
+    res.json({ order });
+  }catch(e){ next(e); }
 });
 
 // 查單
-app.get('/orders/:id', (req, res) => {
-  sweepExpired();
-  const o = Orders.get(req.params.id);
-  if (!o) return err(res, 404, 'not found');
-  return ok(res, o);
+app.get('/orders/:id', async (req,res)=>{
+  const id = req.params.id;
+  const r  = await pool.query(
+    `SELECT id, asset, amount, status, expires_at AS "expiresAt",
+            tx_hash AS "txHash", network
+     FROM orders WHERE id=$1`, [id]
+  );
+  if (r.rowCount===0) return res.status(404).json({ error:'order not found' });
+  res.json({ order: r.rows[0] });
 });
 
-// 取消
-app.post('/orders/:id/cancel', (req, res) => {
-  const o = Orders.get(req.params.id);
-  if (!o) return err(res, 404, 'not found');
-  if (o.status === 'pending') o.status = 'cancelled';
-  return ok(res, o);
+// 取消訂單（只允許 pending，並把庫存加回）
+app.post('/orders/:id/cancel', async (req,res,next)=>{
+  const id = req.params.id;
+  try{
+    const o = await withTx(async (c)=>{
+      const q = await c.query(`SELECT status FROM orders WHERE id=$1 FOR UPDATE`, [id]);
+      if (q.rowCount===0) throw new Error('order not found');
+      if (q.rows[0].status!=='pending') return null;
+
+      const items = await c.query(`SELECT item_id, qty FROM order_items WHERE order_id=$1`, [id]);
+      for (const it of items.rows){
+        await c.query(`UPDATE items SET stock = stock + $2 WHERE id=$1`, [it.item_id, it.qty]);
+      }
+      await c.query(`UPDATE orders SET status='cancelled', cancelled_at=NOW() WHERE id=$1`, [id]);
+
+      const r = await c.query(
+        `SELECT id, asset, amount, status, expires_at AS "expiresAt", tx_hash AS "txHash", network
+         FROM orders WHERE id=$1`, [id]
+      );
+      return r.rows[0];
+    });
+    if (!o) return res.json({ ok:true, note:'not pending' });
+    res.json({ order:o });
+  }catch(e){ next(e); }
 });
 
-// 前端手動確認（開發測試方便用）
-app.post('/orders/:id/confirm', (req, res) => {
-  const o = Orders.get(req.params.id);
-  if (!o) return err(res, 404, 'not found');
-  o.status = 'paid';
-  o.paidAt = nowSec();
-  return ok(res, o);
+// 前端「我已完成轉帳」通知（可選）
+app.post('/orders/:id/confirm', async (req,res)=>{
+  res.json({ ok:true }); // 我們用 webhook 實際判斷
 });
 
-// 404
-app.use((req, res) => err(res, 404, 'not found'));
+// ====== Webhook：Alchemy Address Activity ======
+// 注意：一定要 raw body 驗簽
+app.post('/webhook/alchemy', express.raw({type:'application/json'}), async (req,res)=>{
+  try{
+    const raw   = req.body;                // Buffer
+    const sig   = req.header('X-Alchemy-Signature') || '';
+    const hmac  = crypto.createHmac('sha256', WEBHOOK_SECRET).update(raw).digest('hex');
+    if (sig !== hmac) { console.log('[HOOK] invalid signature'); return res.status(401).end(); }
 
-// 啟動
-app.listen(PORT, () => {
-  console.log('////////////////////////////////////////////////////////////');
-  console.log('x5 backend listening on http://localhost:' + PORT);
-  console.log('RECEIVING_ADDR =', RECEIVING_ADDR || '(not set)');
-  console.log('ACCEPT_TOKENS  =', ACCEPT_TOKENS);
-  console.log('MIN_CONF       =', MIN_CONFIRMATIONS, '  ORDER_TTL_MIN =', ORDER_TTL_MIN);
-  console.log('==> Available at your primary URL after deploy (Render)');
-  console.log('////////////////////////////////////////////////////////////');
+    const payload = JSON.parse(raw.toString('utf8'));
+    const acts = payload?.event?.activity || [];
+
+    for (const a of acts){
+      // 只看「入帳到我們收款位址」的 log
+      const to   = (a.toAddress||'').toLowerCase();
+      const from = (a.fromAddress||'').toLowerCase();
+      if (!to || to !== RECEIVING_ADDR) continue;
+
+      const confs = Number(a?.extraInfo?.confirmations || 0);
+      if (confs < MIN_CONF) continue; // 等待足夠確認數
+
+      const tokenAddr = (a.rawContract?.address||'').toLowerCase();
+      const isUSDT    = tokenAddr === '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9';
+      const isETH     = !tokenAddr || tokenAddr === '0x0000000000000000000000000000000000000000';
+
+      // 取金額（USDT 6 decimals、ETH 18 decimals）
+      let amount = '0';
+      if (isUSDT) amount = String(Number(a.value || 0) / 1e6);
+      else if (isETH) amount = String(Number(a.value || 0) / 1e18);
+      else continue;
+
+      const asset  = isUSDT ? 'USDT' : 'ETH';
+      const txhash = a.hash;
+      const network= (payload?.event?.network || '').toUpperCase();
+
+      // 用 amount + status=pending 去配對最新一張訂單（也可改成你把 orderId 放在 memo 來配對）
+      await withTx(async (c)=>{
+        const q = await c.query(
+          `SELECT id FROM orders
+            WHERE status='pending' AND asset=$1 AND amount::numeric = $2::numeric
+              AND NOW() <= expires_at
+            ORDER BY created_at DESC
+            LIMIT 1 FOR UPDATE`,
+          [asset, amount]
+        );
+        if (q.rowCount===0) return;
+
+        const id = q.rows[0].id;
+        await c.query(`UPDATE orders SET status='paid', tx_hash=$2, network=$3, paid_at=NOW() WHERE id=$1`, [id, txhash, network]);
+      });
+
+      console.log('✅ HOOK PAID', asset, amount, a.hash);
+    }
+    res.json({ ok:true });
+  }catch(err){
+    console.error('HOOK error', err);
+    res.status(500).end();
+  }
 });
 
+// ====== misc ======
+app.get('/', (_,res)=>res.send('x5 backend live'));
+app.use((err,req,res,next)=>{
+  console.error(err);
+  res.status(500).json({ error: String(err.message||err) });
+});
+
+app.listen(PORT, ()=>console.log('listening on', PORT));
