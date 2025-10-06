@@ -48,21 +48,37 @@ const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || '';
 // ===================================================================
 app.get('/items', async (req, res) => {
   const r = await pool.query(
-    `SELECT id, title, description, category, price, stock, img, sort_order
-     FROM items ORDER BY sort_order NULLS LAST, id`
+    `SELECT id, sku, title, description, category, price, stock, img, sort_order
+     FROM items
+     ORDER BY sort_order NULLS LAST, id`
   );
   res.json({ items: r.rows });
 });
 
 app.post('/items/upsert', requireAdmin, async (req, res, next) => {
   try {
-    const { id, title, description = '', category = null, price = 0, stock = 0, img = null, sortOrder = null } = req.body || {};
+    const {
+      id,
+      sku: skuRaw,
+      title,
+      description = '',
+      category = null,
+      price = 0,
+      stock = 0,
+      img = null,
+      sortOrder = null,
+    } = req.body || {};
+
     if (!id || !title) return res.status(400).json({ error: 'id/title required' });
+
+    const sku = (String(skuRaw ?? id)).trim(); // ★ 沒填就用 id
+
     const q = `
-      INSERT INTO items (id,title,description,category,price,stock,img,sort_order)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      INSERT INTO items (id, sku, title, description, category, price, stock, img, sort_order)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
       ON CONFLICT (id) DO UPDATE
-        SET title=EXCLUDED.title,
+        SET sku=EXCLUDED.sku,
+            title=EXCLUDED.title,
             description=EXCLUDED.description,
             category=EXCLUDED.category,
             price=EXCLUDED.price,
@@ -70,7 +86,7 @@ app.post('/items/upsert', requireAdmin, async (req, res, next) => {
             img=EXCLUDED.img,
             sort_order=EXCLUDED.sort_order
       RETURNING *`;
-    const r = await pool.query(q, [id, title, description, category, price, stock, img, sortOrder]);
+    const r = await pool.query(q, [id, sku, title, description, category, price, stock, img, sortOrder]);
     res.json({ item: r.rows[0] });
   } catch (e) { next(e); }
 });
@@ -407,4 +423,5 @@ app.get('/', (_, res) => res.send('x5 backend live'));
 app.use((err, req, res, next) => { console.error(err); res.status(500).json({ error: String(err.message || err) }); });
 
 app.listen(PORT, () => console.log('listening on', PORT));
+
 
