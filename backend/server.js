@@ -95,6 +95,8 @@ app.post('/items/:id/set-stock', async (req, res, next) => {
 
 // ================== Orders（訂單） ==================
 app.post('/orders', async (req, res, next) => {
+  // server.js -> app.post('/orders', ...)
+  console.log('[ORDERS] created', id, asset, amount);  // 這行是新增的
   const { id, asset = 'USDT', amount = 0, items = [] } = req.body || {};
   if (!id) return res.status(400).json({ error: 'id required' });
 
@@ -276,4 +278,5 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => console.log('listening on', PORT));
+
 
