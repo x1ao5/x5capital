@@ -202,31 +202,64 @@ app.post('/webhook/alchemy', express.raw({ type: 'application/json' }), async (r
       const isUSDT    = tokenAddr === '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9';
       const isETH     = !tokenAddr || tokenAddr === '0x0000000000000000000000000000000000000000';
 
-      let amount = '0';
-      if (isUSDT) amount = String(Number(a.value || 0) / 1e6);
-      else if (isETH) amount = String(Number(a.value || 0) / 1e18);
+      let amountStr = '0';
+      if (isUSDT) amountStr = String(Number(a.value || 0) / 1e6);
+      else if (isETH) amountStr = String(Number(a.value || 0) / 1e18);
       else continue;
 
       const asset   = isUSDT ? 'USDT' : 'ETH';
       const txhash  = a.hash;
       const network = (payload?.event?.network || '').toUpperCase();
 
-      await withTx(async (c) => {
-        const q = await c.query(
+      const updated = await withTx(async (c) => {
+        // 先精確相等
+        let q = await c.query(
           `SELECT id FROM orders
             WHERE status='pending' AND asset=$1 AND amount::numeric = $2::numeric
               AND NOW() <= expires_at
             ORDER BY created_at DESC
             LIMIT 1 FOR UPDATE`,
-          [asset, amount]
+          [asset, amountStr]
         );
-        if (q.rowCount === 0) return;
+        // 再試四捨五入到 2 位
+        if (q.rowCount === 0) {
+          q = await c.query(
+            `SELECT id FROM orders
+              WHERE status='pending' AND asset=$1
+                AND ROUND(amount::numeric,2) = ROUND($2::numeric,2)
+                AND NOW() <= expires_at
+              ORDER BY created_at DESC
+              LIMIT 1 FOR UPDATE`,
+            [asset, amountStr]
+          );
+        }
+        // 最後用 ±0.01 容差
+        if (q.rowCount === 0) {
+          q = await c.query(
+            `SELECT id FROM orders
+              WHERE status='pending' AND asset=$1
+                AND ABS(amount::numeric - $2::numeric) <= 0.01
+                AND NOW() <= expires_at
+              ORDER BY created_at DESC
+              LIMIT 1 FOR UPDATE`,
+            [asset, amountStr]
+          );
+        }
+
+        if (q.rowCount === 0) return false;
 
         const id = q.rows[0].id;
-        await c.query(`UPDATE orders SET status='paid', tx_hash=$2, network=$3, paid_at=NOW() WHERE id=$1`, [id, txhash, network]);
+        await c.query(
+          `UPDATE orders
+             SET status='paid', tx_hash=$2, network=$3, paid_at=NOW(), updated_at=NOW()
+           WHERE id=$1`,
+          [id, txhash, network]
+        );
+        return true;
       });
 
-      console.log('✅ HOOK PAID', asset, amount, a.hash);
+      if (updated) console.log('✅ HOOK PAID', asset, amountStr, txhash);
+      else         console.log('⚠️ HOOK no match', asset, amountStr, txhash);
     }
     res.json({ ok: true });
   } catch (err) {
@@ -243,3 +276,4 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => console.log('listening on', PORT));
+
