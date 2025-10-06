@@ -161,6 +161,7 @@ itemsTbody.onclick = async (e) => {
 document.getElementById('submitItem').onclick = async ()=>{
   const body = {
     id: document.getElementById('f_id').value.trim(),
+    sku: document.getElementById('f_sku').value || id).trim(),
     title: document.getElementById('f_title').value.trim(),
     description: document.getElementById('f_desc').value.trim(),
     category: document.getElementById('f_category').value.trim() || null,
