@@ -1,4 +1,5 @@
 // ===== Config + helpers =====
+const ordersMsg = document.getElementById('ordersMsg');
 const baseEl = document.getElementById('base');
 const tokenEl = document.getElementById('token');
 const msg = (el, s) => el && (el.textContent = s);
@@ -211,21 +212,38 @@ const ordersTbody = document.querySelector('#ordersTable tbody');
 const oCountEl = document.getElementById('ordersCount');
 
 async function loadOrders(){
-  const status = document.getElementById('o_status').value || '';
-  const q = document.getElementById('o_q').value.trim();
-  const params = new URLSearchParams();
-  if (status) params.set('status', status);
-  if (q) params.set('q', q);
-  params.set('limit', '100');
-  try{
+  if (ordersMsg) ordersMsg.textContent = '';
+  try {
+    // 先試管理 API（需要 x-admin-token）
+    const status = document.getElementById('o_status').value || '';
+    const q = document.getElementById('o_q').value.trim();
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    if (q) params.set('q', q);
+    params.set('limit', '100');
+
     const { orders } = await j('GET', `/orders/admin?${params.toString()}`);
-    renderOrders(orders||[]);
-  }catch{
-    // 後端沒更新也能 fallback 少量看看
-    const rows = await j('GET', '/orders/debug-latest');
-    renderOrders(rows||[]);
+    if (!Array.isArray(orders)) throw new Error('格式不符');
+    renderOrders(orders);
+    if (orders.length === 0 && ordersMsg) {
+      ordersMsg.textContent = '（沒有符合條件的訂單，或是目前 DB 裡沒有資料）';
+    }
+  } catch (errAdmin) {
+    // 管理 API 失敗 → 退而求其次用 debug-latest（不需 token）
+    try {
+      const rows = await j('GET', '/orders/debug-latest');
+      const list = Array.isArray(rows) ? rows : [];
+      renderOrders(list);
+      if (list.length === 0 && ordersMsg) {
+        ordersMsg.textContent = '（/orders/admin 失敗或未開啟；已改用 /orders/debug-latest，但也沒有資料）';
+      }
+    } catch (errDbg) {
+      if (ordersMsg) ordersMsg.textContent = `載入失敗：${errAdmin.message}`;
+      renderOrders([]); // 清空畫面
+    }
   }
 }
+
 function renderOrders(list){
   oCountEl.textContent = `${list.length} 筆`;
   ordersTbody.innerHTML = list.map(o=>{
@@ -234,16 +252,21 @@ function renderOrders(list){
     const act = st==='pending'
       ? `<button data-act="ocancel" data-id="${o.id}" class="warn">取消</button>`
       : `<button data-act="oitems" data-id="${o.id}">明細</button>`;
+    // 兼容兩種欄位：expiresAt（管理 API）或 expires_at（debug-latest）
+    const exp = o.expiresAt || o.expires_at;
+    const created = o.created_at || o.createdAt || o.created;
+
     return `<tr data-id="${o.id}">
       <td><strong>${o.id}</strong></td>
-      <td>${o.asset||''} ${money(o.amount)}</td>
+      <td>${o.asset||''} ${Number(o.amount||0).toFixed(2)}</td>
       <td>${st}</td>
-      <td>${ts(o.created_at)}</td>
-      <td>${ts(o.expiresAt || o.expires_at)}</td>
+      <td>${ts(created)}</td>
+      <td>${ts(exp)}</td>
       <td class="row">${tx} ${act}</td>
     </tr>`;
   }).join('');
 }
+
 document.getElementById('reloadOrders').onclick = loadOrders;
 document.getElementById('o_status').onchange = loadOrders;
 document.getElementById('o_q').oninput = () => { clearTimeout(window.__o); window.__o = setTimeout(loadOrders, 300); };
