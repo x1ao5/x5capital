@@ -101,6 +101,63 @@ app.post('/items/:id/set-stock', requireAdmin, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ==================== Items：進階管理 ====================
+
+// 刪除商品（若被訂單引用會失敗 → 自動改為 stock=0 當作下架）
+app.delete('/items/:id', requireAdmin, async (req, res) => {
+  const id = req.params.id;
+  try {
+    const r = await pool.query(`DELETE FROM items WHERE id=$1`, [id]);
+    if (r.rowCount === 0) return res.status(404).json({ error: 'item not found' });
+    return res.json({ ok: true, deleted: id });
+  } catch (e) {
+    // 多半是外鍵約束擋住（order_items 參考了它）
+    await pool.query(`UPDATE items SET stock=0 WHERE id=$1`, [id]);
+    return res.json({ ok: false, downgraded: id, note: 'item referenced by orders; set stock=0 instead' });
+  }
+});
+
+// 調整排序（sort_order）
+app.post('/items/:id/sort', requireAdmin, async (req, res, next) => {
+  try {
+    const id = req.params.id;
+    const sortOrder = req.body?.sortOrder == null ? null : Number(req.body.sortOrder);
+    const r = await pool.query(
+      `UPDATE items SET sort_order=$2 WHERE id=$1 RETURNING *`,
+      [id, sortOrder]
+    );
+    if (r.rowCount === 0) return res.status(404).json({ error: 'item not found' });
+    res.json({ item: r.rows[0] });
+  } catch (e) { next(e); }
+});
+
+// 批次 upsert（陣列）
+app.post('/items/bulk-upsert', requireAdmin, async (req, res, next) => {
+  try {
+    const arr = Array.isArray(req.body) ? req.body : [];
+    const out = [];
+    for (const it of arr) {
+      const { id, title, description = '', category = null, price = 0, stock = 0, img = null, sortOrder = null } = it || {};
+      if (!id || !title) continue;
+      const q = `
+        INSERT INTO items (id,title,description,category,price,stock,img,sort_order)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+        ON CONFLICT (id) DO UPDATE
+          SET title=EXCLUDED.title,
+              description=EXCLUDED.description,
+              category=EXCLUDED.category,
+              price=EXCLUDED.price,
+              stock=EXCLUDED.stock,
+              img=EXCLUDED.img,
+              sort_order=EXCLUDED.sort_order
+        RETURNING *`;
+      const r = await pool.query(q, [id, title, description, category, price, stock, img, sortOrder]);
+      out.push(r.rows[0]);
+    }
+    res.json({ items: out });
+  } catch (e) { next(e); }
+});
+
 // ===================================================================
 // Orders（訂單）
 // ===================================================================
@@ -210,6 +267,41 @@ app.post('/orders/sweep-expired', requireAdmin, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ==================== Orders：查詢/明細 ====================
+
+// 訂單列表（管理用）：?status=pending|paid|cancelled|expired&q=keyword&limit=50&offset=0
+app.get('/orders/admin', requireAdmin, async (req, res, next) => {
+  try {
+    const { status = null, q = null, limit = 50, offset = 0 } = req.query;
+    const r = await pool.query(
+      `SELECT id, asset, amount, status, tx_hash AS "txHash", network,
+              created_at, updated_at, paid_at, cancelled_at, expires_at AS "expiresAt"
+       FROM orders
+       WHERE ($1::text IS NULL OR status=$1::text)
+         AND ($2::text IS NULL OR id ILIKE '%'||$2::text||'%')
+       ORDER BY created_at DESC
+       LIMIT LEAST($3::int, 200) OFFSET GREATEST($4::int, 0)`,
+      [status, q, Number(limit), Number(offset)]
+    );
+    res.json({ orders: r.rows });
+  } catch (e) { next(e); }
+});
+
+// 訂單明細（items）
+app.get('/orders/:id/items', requireAdmin, async (req, res, next) => {
+  try {
+    const id = req.params.id;
+    const r = await pool.query(
+      `SELECT oi.item_id AS "itemId", oi.qty, i.title, i.price
+       FROM order_items oi
+       LEFT JOIN items i ON i.id = oi.item_id
+       WHERE oi.order_id=$1`,
+      [id]
+    );
+    res.json({ items: r.rows });
+  } catch (e) { next(e); }
+});
+
 // ===================================================================
 // Webhook（Alchemy）— 同時嘗試 raw 與除精度兩種解讀
 // ===================================================================
@@ -315,3 +407,4 @@ app.get('/', (_, res) => res.send('x5 backend live'));
 app.use((err, req, res, next) => { console.error(err); res.status(500).json({ error: String(err.message || err) }); });
 
 app.listen(PORT, () => console.log('listening on', PORT));
+
