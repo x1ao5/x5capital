@@ -1,399 +1,151 @@
 <!doctype html>
 <html lang="zh-Hant">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<meta name="robots" content="noindex,nofollow" />
-<title>X5 Admin — 商品 & 庫存控台</title>
-<style>
-  :root{
-    --bg:#0b0b0b;--panel:#111;--muted:#9aa0a6;--line:#222;--brand:#7c5cff;
-    --ok:#22c55e;--warn:#f59e0b;--err:#ef4444;--text:#fff;
-  }
-  html,body{background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-  *{box-sizing:border-box}
-  .wrap{max-width:1080px;margin:24px auto;padding:0 16px}
-  h1{font-weight:800;letter-spacing:.4px;margin:0 0 16px}
-  .muted{color:var(--muted)}
-  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin:12px 0}
-  input,select,textarea,button{background:#0f0f0f;border:1px solid #2a2a2a;color:#fff;border-radius:10px;padding:8px 10px}
-  input[type="number"]{width:120px}
-  input[type="text"]{min-width:220px}
-  textarea{width:100%;min-height:120px}
-  button{cursor:pointer}
-  button.primary{background:var(--brand);border-color:#6a52ff}
-  button.ok{background:#15351f;border-color:#235e39;color:#b7ffcf}
-  button.warn{background:#3a2a00;border-color:#6a5200;color:#ffd98a}
-  button.ghost{background:#0d0d0d}
-  .grid{width:100%;overflow:auto}
-  table{width:100%;border-collapse:collapse}
-  th,td{border-bottom:1px solid #1f1f1f;padding:8px 10px;text-align:left;vertical-align:middle}
-  th{position:sticky;top:0;background:#121212;z-index:1}
-  img.thumb{width:48px;height:48px;object-fit:cover;border-radius:9px;border:1px solid #222}
-  .r{text-align:right}
-  .center{text-align:center}
-  .tag{display:inline-block;border:1px solid #2b2b2b;border-radius:20px;padding:2px 8px;font-size:12px;color:#bbb}
-  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:8px 0}
-  .pill{padding:6px 10px;border-radius:999px;border:1px solid #2b2b2b;background:#121212}
-  .flex1{flex:1}
-  .toast{position:fixed;inset:auto 16px 16px auto;background:#111;border:1px solid #333;border-radius:12px;padding:10px 12px;color:#fff;opacity:0;transform:translateY(6px);transition:.2s}
-  .toast.show{opacity:1;transform:translateY(0)}
-  .status-dot{display:inline-block;width:8px;height:8px;border-radius:50%}
-  .status-paid{background:var(--ok)} .status-pending{background:var(--warn)} .status-cancelled{background:var(--err)} .status-expired{background:#666}
-  .nowrap{white-space:nowrap}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>X5 Admin</title>
+  <meta name="robots" content="noindex,nofollow" />
+  <style>
+    :root { color-scheme: dark; --bg:#0b0b0b; --card:#121212; --line:#1f1f1f; --muted:#9aa0a6; --acc:#5eead4; }
+    * { box-sizing: border-box; }
+    body{ margin:0; background:var(--bg); color:#fff; font:14px/1.5 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Noto Sans", "Apple Color Emoji","Segoe UI Emoji";}
+    header{ position:sticky; top:0; z-index:10; background:rgba(0,0,0,.6); backdrop-filter:saturate(140%) blur(8px); border-bottom:1px solid var(--line); }
+    .wrap{ max-width:1080px; margin:0 auto; padding:16px; }
+    .row{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+    input,select,button,textarea{ background:#171717; border:1px solid var(--line); color:#fff; padding:8px 10px; border-radius:10px; }
+    input:focus,select:focus,textarea:focus{ outline:none; border-color:#3a3a3a; }
+    button{ cursor:pointer; }
+    button.primary{ background:#1d312e; border-color:#24443e; color:#8af5e2; }
+    button.warn{ background:#2e1d1d; border-color:#443030; color:#fca5a5; }
+    .tabs{ display:flex; gap:8px; margin-top:12px; }
+    .tabs button{ padding:10px 14px; border-radius:999px; }
+    .tabs button.active{ background:#222; border-color:#333; }
+    .grid{ display:grid; gap:12px; grid-template-columns: repeat(1, minmax(0,1fr)); }
+    @media (min-width: 900px){ .grid{ grid-template-columns: 2fr 1fr; } }
+    .card{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; }
+    .muted{ color:var(--muted); }
+    table{ width:100%; border-collapse: collapse; }
+    th,td{ padding:8px 6px; border-bottom:1px dashed var(--line); vertical-align: top; }
+    .chip{ padding:2px 8px; border:1px solid var(--line); border-radius:999px; font-size:12px; color:var(--muted); }
+    .right{ text-align:right; }
+    .flex{ display:flex; gap:8px; align-items:center; }
+    .hidden{ display:none; }
+    .code{ background:#0f0f0f; border:1px solid var(--line); padding:8px; border-radius:8px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>🛠️ X5 Admin <span class="muted">— 商品 & 庫存控台</span></h1>
+  <header>
+    <div class="wrap row">
+      <strong>🛠 X5 Admin</strong>
+      <input id="base" placeholder="https://x5capital.onrender.com" size="36">
+      <input id="token" placeholder="ADMIN_TOKEN" size="30">
+      <button id="save" class="primary">保存</button>
+      <span class="muted">（沒有 Token 就無法修改）</span>
+    </div>
+    <div class="wrap tabs">
+      <button data-tab="items" class="active">商品</button>
+      <button data-tab="orders">訂單</button>
+      <button data-tab="tools">工具</button>
+    </div>
+  </header>
 
-  <!-- 基本設定 -->
-  <div class="card">
-    <div class="row">
-      <label>後端</label>
-      <input id="base" placeholder="https://x5capital.onrender.com" size="34">
-      <label>Token</label>
-      <input id="token" type="password" placeholder="ADMIN_TOKEN" size="30">
-      <button id="save" class="ghost">保存</button>
-      <button id="ping" class="ghost">連線測試</button>
-      <span id="pingRes" class="muted"></span>
-    </div>
-    <div class="row" style="margin-top:8px">
-      <button id="sweep" class="warn">清理逾期訂單並回補庫存</button>
-      <button id="loadItems" class="ghost">重新載入商品</button>
-      <button id="loadOrders" class="ghost">查看最近訂單</button>
-      <span class="muted">※ 只有帶對 Token 的請求，才動得了資料。</span>
-    </div>
-  </div>
-
-  <!-- 商品操作工具列 -->
-  <div class="card">
-    <div class="toolbar">
-      <input id="q" placeholder="搜尋名稱 / ID / 類別" class="flex1">
-      <select id="cat"><option value="">全部分類</option></select>
-      <select id="sort">
-        <option value="sort_order">排序：sort_order</option>
-        <option value="title">排序：名稱</option>
-        <option value="price_asc">價格：低→高</option>
-        <option value="price_desc">價格：高→低</option>
-        <option value="stock_asc">庫存：低→高</option>
-        <option value="stock_desc">庫存：高→低</option>
-      </select>
-      <button id="export" class="ghost">匯出 JSON</button>
-      <button id="toggleImport" class="ghost">匯入 JSON</button>
-      <button id="bulkPlus" class="ghost">選取 +1</button>
-      <button id="bulkMinus" class="ghost">選取 −1</button>
-      <button id="bulkSet" class="ghost">選取 設庫存</button>
-    </div>
-    <div id="importBox" style="display:none;margin-top:8px">
-      <textarea id="importArea" placeholder='[{"id":"sku-1","title":"品名","price":99,"stock":10,"img":"...","category":"...","description":"...","sortOrder":10}]'></textarea>
-      <div class="row">
-        <button id="importDo" class="primary">上傳 / 更新</button>
-        <span class="muted">※ 這是逐筆 Upsert；需要 Token。</span>
+  <main class="wrap">
+    <!-- Items -->
+    <section id="tab-items">
+      <div class="grid">
+        <div class="card">
+          <div class="row" style="justify-content:space-between">
+            <div class="row">
+              <input id="q" placeholder="搜尋 id / title" size="24">
+              <select id="sort"><option value="sort">排序: sort_order</option><option value="recent">排序: 建立時間</option><option value="title">排序: 名稱</option></select>
+              <button id="reloadItems">重新載入</button>
+            </div>
+            <div class="row">
+              <button id="exportItems">匯出 JSON</button>
+              <button id="importItems">匯入 JSON</button>
+            </div>
+          </div>
+          <div style="overflow:auto; max-height:62vh; margin-top:6px;">
+            <table id="itemsTable">
+              <thead><tr>
+                <th style="width:28%">商品</th><th>分類</th><th class="right">價格</th><th class="right">庫存</th><th class="right">排序</th><th>操作</th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <h3 id="formTitle">新增 / 編輯商品</h3>
+          <div class="grid" style="grid-template-columns: 1fr;">
+            <input id="f_id" placeholder="id（唯一，例：alpha-pass-1m）">
+            <input id="f_title" placeholder="title">
+            <textarea id="f_desc" placeholder="description" rows="3"></textarea>
+            <input id="f_category" placeholder="category（例：membership/design）">
+            <div class="row">
+              <input id="f_price" type="number" step="0.01" placeholder="price">
+              <input id="f_stock" type="number" step="1" placeholder="stock">
+            </div>
+            <input id="f_img" placeholder="image URL">
+            <input id="f_sort" type="number" step="1" placeholder="sort_order（可空）">
+            <div class="row">
+              <button id="submitItem" class="primary">Upsert</button>
+              <button id="resetForm">重置</button>
+            </div>
+            <div id="formMsg" class="muted"></div>
+          </div>
+        </div>
       </div>
-    </div>
+    </section>
 
-    <div class="grid" style="margin-top:10px">
-      <table id="itemsTable">
-        <thead>
-          <tr>
-            <th style="width:28px"><input type="checkbox" id="chkAll"></th>
-            <th>圖片</th>
-            <th>ID</th>
-            <th>名稱</th>
-            <th>類別</th>
-            <th class="r">價格</th>
-            <th class="r">庫存</th>
-            <th>排序</th>
-            <th class="center">操作</th>
-          </tr>
-        </thead>
-        <tbody id="itemsBody"><tr><td colspan="9" class="muted">載入中…</td></tr></tbody>
-      </table>
-    </div>
-  </div>
+    <!-- Orders -->
+    <section id="tab-orders" class="hidden">
+      <div class="card row" style="justify-content:space-between">
+        <div class="row">
+          <select id="o_status">
+            <option value="">全部</option>
+            <option value="pending">pending</option>
+            <option value="paid">paid</option>
+            <option value="cancelled">cancelled</option>
+            <option value="expired">expired</option>
+          </select>
+          <input id="o_q" placeholder="搜尋 id" size="24">
+          <button id="reloadOrders">重新載入</button>
+        </div>
+        <div class="row">
+          <span id="ordersCount" class="chip">0 筆</span>
+        </div>
+      </div>
+      <div class="card" style="overflow:auto; max-height:72vh;">
+        <table id="ordersTable">
+          <thead><tr>
+            <th>訂單</th><th>資產/金額</th><th>狀態</th><th>建立</th><th>到期</th><th>動作</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
 
-  <!-- 新增 / 更新 商品 -->
-  <div class="card">
-    <h3 style="margin-top:0">新增 / 更新商品</h3>
-    <div class="row" style="gap:14px">
-      <input id="f_id" placeholder="id（唯一）" />
-      <input id="f_title" placeholder="title（名稱）" />
-      <input id="f_category" placeholder="category（分類）" />
-      <input id="f_price" type="number" step="0.01" placeholder="price" />
-      <input id="f_stock" type="number" step="1" placeholder="stock" />
-      <input id="f_sort" type="number" step="1" placeholder="sortOrder" />
-      <input id="f_img" placeholder="img URL" size="40" />
-      <button id="upsert" class="primary">Upsert</button>
-    </div>
-    <div class="row" style="margin-top:8px">
-      <textarea id="f_desc" placeholder="description（商品說明，可多行）"></textarea>
-    </div>
-  </div>
+    <!-- Tools -->
+    <section id="tab-tools" class="hidden">
+      <div class="card">
+        <h3>清理逾期訂單</h3>
+        <div class="row">
+          <button id="sweep" class="warn">掃逾期（/orders/sweep-expired）</button>
+          <span id="sweepMsg" class="muted"></span>
+        </div>
+      </div>
+      <div class="card">
+        <h3>快速貼上 JSON 匯入（同 /items/bulk-upsert）</h3>
+        <p class="muted">格式：陣列，每筆可含 id、title、description、category、price、stock、img、sortOrder</p>
+        <textarea id="jsonArea" rows="12" class="code" placeholder='[{"id":"alpha-pass-1m","title":"Alpha Pass(月)","price":19,"stock":50}]'></textarea>
+        <div class="row" style="margin-top:8px;">
+          <button id="bulkUpsert" class="primary">送出</button>
+          <span id="bulkMsg" class="muted"></span>
+        </div>
+      </div>
+    </section>
+  </main>
 
-  <!-- 最近訂單 -->
-  <div class="card">
-    <div class="row">
-      <h3 style="margin:0">最近訂單</h3>
-      <span id="ordersInfo" class="muted"></span>
-    </div>
-    <div class="grid">
-      <table>
-        <thead>
-          <tr>
-            <th>狀態</th><th>編號</th><th>資產</th><th class="r">金額</th><th>建立</th><th>逾期</th><th class="center">操作</th>
-          </tr>
-        </thead>
-        <tbody id="ordersBody"><tr><td colspan="7" class="muted">尚未載入</td></tr></tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<div id="toast" class="toast"></div>
-
-<script>
-/* ========= 小工具 ========= */
-const $ = (s, d=document)=>d.querySelector(s);
-const $$ = (s, d=document)=>Array.from(d.querySelectorAll(s));
-const toast = (m)=>{ const t=$('#toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1600); };
-const money = (n)=>Number(n||0).toFixed(2);
-const H = ()=>{ const h={'Content-Type':'application/json'}; const t=($('#token').value||'').trim(); if(t) h['x-admin-token']=t; return h; };
-const BASE = ()=>($('#base').value||'').trim().replace(/\/+$/,'');
-const j = async (url, init)=>{ const r = await fetch(url, init); if(!r.ok){ throw new Error((await r.text())||('HTTP '+r.status)); } return r.json(); };
-
-const state = { items:[], filtered:[], orders:[] };
-
-/* ========= 設定區 ========= */
-const LS_BASE='x5_admin_base', LS_TOKEN='x5_admin_token';
-$('#base').value = localStorage.getItem(LS_BASE) || 'https://x5capital.onrender.com';
-$('#token').value = localStorage.getItem(LS_TOKEN) || '';
-
-$('#save').onclick = ()=>{ localStorage.setItem(LS_BASE, BASE()); localStorage.setItem(LS_TOKEN, ($('#token').value||'').trim()); toast('已保存'); };
-$('#ping').onclick = async ()=>{
-  try { const r = await fetch(BASE() + '/items'); const ok = r.ok; $('#pingRes').textContent = ok ? '✅ OK' : '❌ ' + r.status; }
-  catch(e){ $('#pingRes').textContent = '❌ 連線失敗'; }
-};
-
-/* ========= 商品 CRUD ========= */
-async function loadItems(){
-  $('#itemsBody').innerHTML = '<tr><td colspan="9" class="muted">載入中…</td></tr>';
-  const data = await j(BASE()+'/items', { method:'GET' });
-  state.items = data.items || [];
-  renderCats();
-  filterAndRender();
-}
-function renderCats(){
-  const catSel = $('#cat');
-  const cats = Array.from(new Set(state.items.map(i=>i.category).filter(Boolean))).sort();
-  catSel.innerHTML = '<option value="">全部分類</option>' + cats.map(c=>`<option value="${c}">${c}</option>`).join('');
-}
-
-/* 搜尋 + 排序 + 渲染表格 */
-function filterAndRender(){
-  const q = ($('#q').value||'').toLowerCase().trim();
-  const cat = $('#cat').value||'';
-  const sort = $('#sort').value||'sort_order';
-  let arr = state.items.filter(it=>{
-    const hit = (it.title||'').toLowerCase().includes(q) || (it.id||'').toLowerCase().includes(q) || (it.category||'').toLowerCase().includes(q);
-    const okc = !cat || (it.category||'')===cat;
-    return hit && okc;
-  });
-  if (sort==='price_asc')   arr.sort((a,b)=>a.price-b.price);
-  else if (sort==='price_desc') arr.sort((a,b)=>b.price-a.price);
-  else if (sort==='stock_asc')  arr.sort((a,b)=>a.stock-b.stock);
-  else if (sort==='stock_desc') arr.sort((a,b)=>b.stock-a.stock);
-  else if (sort==='title')      arr.sort((a,b)=>String(a.title).localeCompare(String(b.title)));
-  else                          arr.sort((a,b)=>(a.sort_order??0)-(b.sort_order??0));
-  state.filtered = arr;
-  renderItemsTable(arr);
-}
-
-function renderItemsTable(items){
-  const tb = $('#itemsBody');
-  if (!items.length){ tb.innerHTML='<tr><td colspan="9" class="muted">沒有符合條件的商品</td></tr>'; return; }
-  tb.innerHTML = items.map(it=>`
-    <tr data-id="${it.id}">
-      <td class="center"><input type="checkbox" data-sel></td>
-      <td><img class="thumb" src="${it.img||''}" onerror="this.src='https://i.ibb.co/k2H7kfrt/Newx5logo-1.png'"></td>
-      <td class="nowrap"><code>${it.id}</code></td>
-      <td><input data-edit="title" value="${it.title||''}" style="min-width:220px"></td>
-      <td><input data-edit="category" value="${it.category||''}" style="min-width:120px"></td>
-      <td class="r"><input data-edit="price" type="number" step="0.01" value="${money(it.price)}" style="width:120px"></td>
-      <td class="r"><strong id="stk-${it.id}">${it.stock??0}</strong></td>
-      <td><input data-edit="sort_order" type="number" step="1" value="${it.sort_order??''}" style="width:100px"></td>
-      <td class="center">
-        <button data-act="adj" data-delta="-1">−1</button>
-        <button data-act="adj" data-delta="1">+1</button>
-        <input data-set="qty" type="number" step="1" placeholder="set" style="width:90px">
-        <button data-act="apply">套用</button>
-        <button data-act="save" class="primary">儲存</button>
-      </td>
-    </tr>
-  `).join('');
-}
-
-$('#itemsBody').addEventListener('click', async (e)=>{
-  const tr = e.target.closest('tr[data-id]'); if(!tr) return;
-  const id = tr.dataset.id;
-  const act = e.target.dataset.act;
-
-  try{
-    if (act==='adj'){
-      const delta = Number(e.target.dataset.delta||0);
-      const r = await j(`${BASE()}/items/${encodeURIComponent(id)}/adjust`, { method:'POST', headers:H(), body: JSON.stringify({ delta }) });
-      tr.querySelector(`#stk-${id}`).textContent = r.item.stock;
-      toast('已更新庫存');
-      await loadItems();
-    }
-    if (act==='apply'){
-      const qty = Number(tr.querySelector('input[data-set="qty"]').value||0);
-      const r = await j(`${BASE()}/items/${encodeURIComponent(id)}/set-stock`, { method:'POST', headers:H(), body: JSON.stringify({ stock: qty }) });
-      tr.querySelector(`#stk-${id}`).textContent = r.item.stock;
-      toast('已設定庫存');
-      await loadItems();
-    }
-    if (act==='save'){
-      const body = readInlineEdits(tr, id);
-      await j(`${BASE()}/items/upsert`, { method:'POST', headers:H(), body: JSON.stringify(body) });
-      toast('已儲存');
-      await loadItems();
-    }
-  }catch(err){ toast(err.message); }
-});
-
-function readInlineEdits(tr, id){
-  const g = (sel)=>tr.querySelector(`[data-edit="${sel}"]`)?.value ?? '';
-  const price = Number(g('price')||0);
-  const sort  = g('sort_order')==='' ? null : Number(g('sort_order'));
-  const category = g('category')||null;
-  const title = g('title')||'未命名';
-  const img = state.items.find(x=>x.id===id)?.img || '';
-  const description = state.items.find(x=>x.id===id)?.description || '';
-  return { id, title, category, price, img, description, sortOrder: sort };
-}
-
-/* 全選 / 批次調整 */
-$('#chkAll').onchange = ()=>$$('#itemsBody input[type="checkbox"][data-sel]').forEach(x=>x.checked=$('#chkAll').checked);
-const selectedIds = ()=>$$('#itemsBody tr[data-id]').filter(tr=>tr.querySelector('input[data-sel]').checked).map(tr=>tr.dataset.id);
-$('#bulkPlus').onclick  = ()=>bulkAdjust(+1);
-$('#bulkMinus').onclick = ()=>bulkAdjust(-1);
-$('#bulkSet').onclick   = async ()=>{
-  const ids = selectedIds(); if(!ids.length) return toast('請先勾選商品');
-  const qty = Number(prompt('要把庫存設為幾？','0')||'0');
-  for (const id of ids){
-    try{ await j(`${BASE()}/items/${encodeURIComponent(id)}/set-stock`, { method:'POST', headers:H(), body: JSON.stringify({ stock: qty }) }); }
-    catch(e){ toast(`${id}: ${e.message}`); }
-  }
-  toast('批次設定完成'); await loadItems();
-};
-async function bulkAdjust(delta){
-  const ids = selectedIds(); if(!ids.length) return toast('請先勾選商品');
-  for (const id of ids){
-    try{ await j(`${BASE()}/items/${encodeURIComponent(id)}/adjust`, { method:'POST', headers:H(), body: JSON.stringify({ delta }) }); }
-    catch(e){ toast(`${id}: ${e.message}`); }
-  }
-  toast('批次調整完成'); await loadItems();
-}
-
-/* 新增 / 更新 商品表單 */
-$('#upsert').onclick = async ()=>{
-  const body = {
-    id: $('#f_id').value.trim(),
-    title: $('#f_title').value.trim(),
-    description: $('#f_desc').value,
-    category: $('#f_category').value.trim() || null,
-    price: Number($('#f_price').value||0),
-    stock: Number($('#f_stock').value||0),
-    img: $('#f_img').value.trim() || null,
-    sortOrder: ($('#f_sort').value===''? null : Number($('#f_sort').value))
-  };
-  if (!body.id || !body.title) return toast('id / title 必填');
-  try{
-    await j(`${BASE()}/items/upsert`, { method:'POST', headers:H(), body: JSON.stringify(body) });
-    toast('已上架 / 更新');
-    clearForm(); await loadItems();
-  }catch(err){ toast(err.message); }
-};
-function clearForm(){ ['f_id','f_title','f_desc','f_category','f_price','f_stock','f_img','f_sort'].forEach(id=>$('#'+id).value=''); }
-
-/* 匯出 / 匯入 JSON */
-$('#export').onclick = ()=>{
-  const blob = new Blob([JSON.stringify(state.filtered, null, 2)], {type:'application/json'});
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'items.json'; a.click();
-};
-$('#toggleImport').onclick = ()=>{ const b=$('#importBox'); b.style.display = b.style.display==='none' ? 'block' : 'none'; };
-$('#importDo').onclick = async ()=>{
-  let arr = []; try{ arr = JSON.parse($('#importArea').value||'[]'); }catch{ return toast('JSON 解析失敗'); }
-  if (!Array.isArray(arr) || !arr.length) return toast('沒有資料');
-  for (const it of arr){
-    const body = {
-      id: it.id, title: it.title || it.name || '未命名',
-      description: it.description || it.desc || '',
-      category: it.category || null,
-      price: Number(it.price || it.price_usdt || 0),
-      stock: Number(it.stock || 0),
-      img: it.img || it.image || null,
-      sortOrder: (it.sortOrder ?? it.sort_order ?? null)
-    };
-    try{ await j(`${BASE()}/items/upsert`, { method:'POST', headers:H(), body: JSON.stringify(body) }); }
-    catch(e){ toast(`${body.id}: ${e.message}`); }
-  }
-  toast('批次上傳完成'); $('#importArea').value=''; await loadItems();
-};
-
-/* ========= 訂單 ========= */
-async function loadOrders(){
-  $('#ordersBody').innerHTML = '<tr><td colspan="7" class="muted">載入中…</td></tr>';
-  try{
-    const rows = await j(BASE()+'/orders/debug-latest', { method:'GET' });
-    state.orders = rows;
-    $('#ordersInfo').textContent = `共 ${rows.length} 筆 (最近)`;
-    renderOrders();
-  }catch(e){ $('#ordersBody').innerHTML = '<tr><td colspan="7" class="muted">讀取失敗</td></tr>'; }
-}
-function renderOrders(){
-  const tb = $('#ordersBody');
-  if (!state.orders.length){ tb.innerHTML='<tr><td colspan="7" class="muted">尚無資料</td></tr>'; return; }
-  tb.innerHTML = state.orders.map(o=>{
-    const st = String(o.status||'').toLowerCase();
-    const dot = `<span class="status-dot status-${st}" title="${st}"></span>`;
-    return `<tr>
-      <td class="nowrap">${dot} ${st}</td>
-      <td class="nowrap"><code>${o.id}</code></td>
-      <td>${o.asset||''}</td>
-      <td class="r">${money(o.amount)}</td>
-      <td class="nowrap">${(o.created_at||'').replace('T',' ').replace('Z','')}</td>
-      <td class="nowrap">${(o.expires_at||'').replace('T',' ').replace('Z','')}</td>
-      <td class="center">
-        ${st==='pending' ? `<button data-cancel="${o.id}" class="warn">取消</button>` : '<span class="muted">—</span>'}
-      </td>
-    </tr>`;
-  }).join('');
-}
-$('#ordersBody').addEventListener('click', async (e)=>{
-  const id = e.target.dataset.cancel; if(!id) return;
-  if(!confirm('確定取消訂單並回補庫存？')) return;
-  try{ await j(`${BASE()}/orders/${encodeURIComponent(id)}/cancel`, { method:'POST', headers:H() }); toast('已取消'); await loadOrders(); await loadItems(); }
-  catch(err){ toast(err.message); }
-});
-
-/* ========= 逾期清理 ========= */
-$('#sweep').onclick = async ()=>{
-  try{ const r = await j(BASE()+'/orders/sweep-expired', { method:'POST', headers:H() }); toast(`已清理逾期：${r.expired||0} 筆`); await loadItems(); await loadOrders(); }
-  catch(err){ toast(err.message); }
-};
-
-/* ========= 搜尋 & 控制 ========= */
-$('#q').oninput = filterAndRender;
-$('#cat').onchange = filterAndRender;
-$('#sort').onchange = filterAndRender;
-$('#loadItems').onclick = loadItems;
-$('#loadOrders').onclick = loadOrders;
-
-/* ========= 啟動 ========= */
-loadItems().catch(()=>{});
-</script>
+  <script src="admin.js"></script>
 </body>
 </html>
