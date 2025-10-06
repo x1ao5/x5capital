@@ -199,76 +199,90 @@ app.post('/webhook/alchemy', express.raw({ type: 'application/json' }), async (r
     const payload = JSON.parse(raw.toString('utf8'));
     const acts = payload?.event?.activity || [];
 
-    for (const a of acts) {
-      const to = (a.toAddress || '').toLowerCase();
-      if (!to || to !== RECEIVING_ADDR) continue;
+for (const a of acts) {
+  const to = (a.toAddress || '').toLowerCase();
+  if (!to || to !== RECEIVING_ADDR) continue;
 
-      const confs = Number(a?.extraInfo?.confirmations || 0);
-      if (confs < MIN_CONF) continue;
+  const confs = Number(a?.extraInfo?.confirmations || 0);
+  if (confs < MIN_CONF) continue;
 
-      const tokenAddr = (a.rawContract?.address || '').toLowerCase();
-      const isUSDT    = tokenAddr === '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9'; // USDT (Arbitrum One)
-      const isETH     = !tokenAddr || tokenAddr === '0x0000000000000000000000000000000000000000';
+  const tokenAddr = (a.rawContract?.address || '').toLowerCase();
+  const isUSDT    = tokenAddr === '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9'; // Arbitrum USDT
+  const isETH     = !tokenAddr || tokenAddr === '0x0000000000000000000000000000000000000000';
 
-      let amountStr = '0';
-      if (isUSDT) amountStr = String(Number(a.value || 0) / 1e6);
-      else if (isETH) amountStr = String(Number(a.value || 0) / 1e18);
-      else continue;
+  // ❶ 取得原始 value（Alchemy 可能已是人類單位）
+  const raw = Number(a.value || 0);
 
-      const asset   = isUSDT ? 'USDT' : 'ETH';
-      const txhash  = a.hash;
-      const network = (payload?.event?.network || '').toUpperCase();
+  // ❷ 準備候選金額（同時嘗試兩種解讀）
+  // USDT：可能是 1（人類單位）或 1_000_000（原始單位）
+  // ETH ：可能是 0.1（人類單位）或 1e17（原始單位）
+  let candidates = [];
+  if (isUSDT) candidates = [raw, raw / 1e6];
+  else if (isETH) candidates = [raw, raw / 1e18];
+  else continue; // 非 ETH / USDT 直接略過
 
-      const updated = await withTx(async (c) => {
-        // 1) 精確相等
-        let q = await c.query(
+  const asset   = isUSDT ? 'USDT' : 'ETH';
+  const txhash  = a.hash;
+  const network = (payload?.event?.network || '').toUpperCase();
+
+  let updated = false;
+  for (const amt of candidates) {
+    const amountStr = String(amt);
+
+    // 三段式對帳：=、四捨五入到 2 位、±0.01 容差
+    updated = await withTx(async (c) => {
+      let q = await c.query(
+        `SELECT id FROM orders
+         WHERE status='pending' AND asset=$1 AND amount::numeric = $2::numeric
+           AND NOW() <= expires_at
+         ORDER BY created_at DESC
+         LIMIT 1 FOR UPDATE`,
+        [asset, amountStr]
+      );
+      if (q.rowCount === 0) {
+        q = await c.query(
           `SELECT id FROM orders
-            WHERE status='pending' AND asset=$1 AND amount::numeric = $2::numeric
-              AND NOW() <= expires_at
-            ORDER BY created_at DESC
-            LIMIT 1 FOR UPDATE`,
+           WHERE status='pending' AND asset=$1
+             AND ROUND(amount::numeric,2) = ROUND($2::numeric,2)
+             AND NOW() <= expires_at
+           ORDER BY created_at DESC
+           LIMIT 1 FOR UPDATE`,
           [asset, amountStr]
         );
-        // 2) 四捨五入到 2 位
-        if (q.rowCount === 0) {
-          q = await c.query(
-            `SELECT id FROM orders
-              WHERE status='pending' AND asset=$1
-                AND ROUND(amount::numeric,2) = ROUND($2::numeric,2)
-                AND NOW() <= expires_at
-              ORDER BY created_at DESC
-              LIMIT 1 FOR UPDATE`,
-            [asset, amountStr]
-          );
-        }
-        // 3) 容差 ±0.01
-        if (q.rowCount === 0) {
-          q = await c.query(
-            `SELECT id FROM orders
-              WHERE status='pending' AND asset=$1
-                AND ABS(amount::numeric - $2::numeric) <= 0.01
-                AND NOW() <= expires_at
-              ORDER BY created_at DESC
-              LIMIT 1 FOR UPDATE`,
-            [asset, amountStr]
-          );
-        }
-
-        if (q.rowCount === 0) return false;
-
-        const id = q.rows[0].id;
-        await c.query(
-          `UPDATE orders
-             SET status='paid', tx_hash=$2, network=$3, paid_at=NOW(), updated_at=NOW()
-           WHERE id=$1`,
-          [id, txhash, network]
+      }
+      if (q.rowCount === 0) {
+        q = await c.query(
+          `SELECT id FROM orders
+           WHERE status='pending' AND asset=$1
+             AND ABS(amount::numeric - $2::numeric) <= 0.01
+             AND NOW() <= expires_at
+           ORDER BY created_at DESC
+           LIMIT 1 FOR UPDATE`,
+          [asset, amountStr]
         );
-        return true;
-      });
+      }
+      if (q.rowCount === 0) return false;
 
-      if (updated) console.log('✅ HOOK PAID', asset, amountStr, txhash);
-      else         console.log('⚠️ HOOK no match', asset, amountStr, txhash);
+      const id = q.rows[0].id;
+      await c.query(
+        `UPDATE orders
+           SET status='paid', tx_hash=$2, network=$3, paid_at=NOW(), updated_at=NOW()
+         WHERE id=$1`,
+        [id, txhash, network]
+      );
+      return true;
+    });
+
+    if (updated) {
+      console.log('✅ HOOK PAID', asset, amountStr, '(raw:', raw, ')', txhash);
+      break; // 有一個候選成功就結束
     }
+  }
+
+  if (!updated) {
+    console.log('⚠️ HOOK no match', asset, raw, '(tried:', candidates.join(' | '), ')', txhash);
+  }
+}
     res.json({ ok: true });
   } catch (err) {
     console.error('HOOK error', err);
@@ -294,3 +308,4 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => console.log('listening on', PORT));
+
