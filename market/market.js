@@ -15,10 +15,20 @@ function toUnits(amount, decimals){
   const padded = (f + '0'.repeat(decimals)).slice(0,decimals);
   return BigInt(i + padded);
 }
+
 function toMs(x) {
   if (x == null) return undefined;
-  const n = Number(x);
-  return n < 1e12 ? n * 1000 : n;
+  if (typeof x === 'number') return x < 1e12 ? x * 1000 : x;
+  if (typeof x === 'string') {
+    let s = x.trim();
+    // 支援 "YYYY-MM-DD HH:mm:ss(.SSS)" -> 轉 ISO，避免各瀏覽器解析不一致
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d+)?$/.test(s)) {
+      s = s.replace(' ', 'T') + 'Z';
+    }
+    const t = Date.parse(s);
+    if (!Number.isNaN(t)) return t;
+  }
+  return undefined; // 解析不到就回 undefined（不要亂給現在時間）
 }
 
 /* ---- 統一的 JSON 取用（加 ngrok 繞過） ---- */
@@ -379,7 +389,7 @@ document.addEventListener('click', async (e)=>{
 
       const pm = $('#payMask'); if (pm) pm.style.display='grid';
       startPolling(o.id);
-      startTTLCountdown(toMs(o.expiresAt) || (Date.now()+15*60*1000));
+      startTTLCountdown(toMs(o.expiresAt));
     } catch { showToast('開啟付款失敗'); }
     return;
   }
@@ -483,7 +493,7 @@ btn=$('#checkoutBtn'); if(btn) btn.addEventListener('click', ()=>{
     return renderQR(makeEip681({asset,amount})).then(()=>{
       const pm=$('#payMask'); if(pm) pm.style.display='grid';
       startPolling(order.id);
-      startTTLCountdown(order.expiresAt || (Date.now()+15*60*1000));
+      startTTLCountdown(toMs(order.expiresAt));
       updateOrdersBadge(); renderOrdersDrawer();
     });
   }).catch(err=>{
@@ -510,3 +520,4 @@ window.__market_boot = function(){
 if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', window.__market_boot, {once:true}); } else { window.__market_boot(); }
 
 console.log('[market] market.js ready');
+
