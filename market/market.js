@@ -47,16 +47,24 @@ async function fetchJSON(url, opt={}) {
   return JSON.parse(txt);
 }
 
-/* ====== 產品（示例） ====== */
-window.PRODUCTS = [
-  { id:'nft-hero',   title:'X5 Genesis NFT',   desc:'首發收藏',        price:49,  category:'nft',        img:'https://i.ibb.co/k2H7kfrt/Newx5logo-1.png', stock:5 },
-  { id:'design-pack',title:'Logo / Banner 設計包', desc:'品牌識別',     price:120, category:'design',     img:'https://i.ibb.co/k2H7kfrt/Newx5logo-1.png', stock:3 },
-  { id:'alpha-pass', title:'Alpha Pass(月)',    desc:'觀測專區',        price:19,  category:'membership',  img:'https://i.ibb.co/k2H7kfrt/Newx5logo-1.png', stock:50 },
-  { id:'pfp-pack',   title:'PFP 快速上線包',     desc:'10 張頭像',      price:35,  category:'design',     img:'https://i.ibb.co/k2H7kfrt/Newx5logo-1.png', stock:10 },
-  { id:'ads-slot',   title:'網站曝光位(7天)',    desc:'首頁/Blog 曝光',  price:150, category:'ads',        img:'https://i.ibb.co/k2H7kfrt/Newx5logo-1.png', stock:2 },
-  { id:'mint-credit',title:'鑄造點數(100次)',    desc:'/mint 配額',     price:25,  category:'credits',    img:'https://i.ibb.co/k2H7kfrt/Newx5logo-1.png', stock:100 },
-  { id:'cs2-skin',   title:'蝴蝶刀(★) | 傳說',   desc:'Butterfly knife', price:1,   category:'cs2',       img:'https://spect.fp.ps.netease.com/file/6863b6a2949bfc538d443a11zlgOYbHd06', stock:1 }
-];
+/* ====== 產品：從後端載入（DB 為真相） ====== */
+let PRODUCTS = [];
+async function hydrateProductsFromAPI(){
+  const data = await fetchJSON(`${BACKEND_BASE}/items`, { method:'GET', mode:'cors' });
+  PRODUCTS = (data.items || []).map(it => ({
+    id: it.id,
+    title: it.title,
+    desc: it.description || '',
+    category: it.category || 'misc',
+    price: Number(it.price || 0),
+    stock: Number.isFinite(it.stock) ? it.stock : 0,
+    img: it.img || 'https://i.ibb.co/k2H7kfrt/Newx5logo-1.png',
+  }));
+}
+async function refreshInventory(){
+  try { await hydrateProductsFromAPI(); renderProducts(); }
+  catch(e){ console.warn('[inventory] refresh fail', e); }
+}
 
 /* ====== CART ====== */
 const CART_KEY='x5_cart_v1';
@@ -112,7 +120,7 @@ window.renderProducts = function(){
   const sort= $('#sortSelect')?.value||'featured';
   const cat = $('#categoryFilter')?.value||'all';
   let data  = PRODUCTS.filter(p=>{
-    const okQ = p.title.toLowerCase().includes(q)||p.desc.toLowerCase().includes(q);
+    const okQ = (p.title||'').toLowerCase().includes(q)||(p.desc||'').toLowerCase().includes(q);
     const okC = (cat==='all')||p.category===cat;
     return okQ && okC;
   });
@@ -201,21 +209,22 @@ async function getOrder(id){
   return o;
 }
 
-// 建單
-async function createOrder(orderId, asset, amount){
+// 建單（夾帶購物車明細，讓後端扣庫存）
+async function createOrder(orderId, asset, amount, items){
   const data = await fetchJSON(`${BACKEND_BASE}/orders`, {
     method:'POST',
     mode:'cors',
     headers:{ 'Content-Type':'application/json' },
-    body: JSON.stringify({ id:orderId, asset, amount })
+    body: JSON.stringify({ id:orderId, asset, amount, items })
   });
   return data; // {order:{...}}
 }
 
-// 取消訂單
+// 取消訂單（取消後刷新庫存）
 async function cancelOrder(orderId){
   try{
     await fetchJSON(`${BACKEND_BASE}/orders/${encodeURIComponent(orderId)}/cancel`, { method:'POST' });
+    await refreshInventory(); // 後端回補庫存 → 重新抓
   }catch{}
 }
 
@@ -252,18 +261,23 @@ function startPolling(orderId){
       if(st==='paid'){
         clearInterval(it); pollMap.delete(orderId);
         showToast('付款成功'); const pm=$('#payMask'); if(pm) pm.style.display='none';
-        isCheckingOut=false; const cb=$('#checkoutBtn'); if(cb) cb.disabled=false; return;
+        isCheckingOut=false; const cb=$('#checkoutBtn'); if(cb) cb.disabled=false;
+        await refreshInventory(); // 入帳後也抓一次庫存（若你之後要顯示已售完）
+        return;
       }
       if(st==='expired' || st==='cancelled'){
         clearInterval(it); pollMap.delete(orderId);
         showToast(st==='expired'?'訂單已逾時':'訂單已取消'); const pm=$('#payMask'); if(pm) pm.style.display='none';
-        isCheckingOut=false; const cb=$('#checkoutBtn'); if(cb) cb.disabled=false; return;
+        isCheckingOut=false; const cb=$('#checkoutBtn'); if(cb) cb.disabled=false;
+        await refreshInventory();
+        return;
       }
       if(st==='pending' && normalizeOrderStatus({status:st, expiresAt: toMs(o.expiresAt)})){
         upsertLocalOrder({ id:o.id, status:'expired' });
         clearInterval(it); pollMap.delete(orderId);
         showToast('訂單已逾時'); const pm=$('#payMask'); if(pm) pm.style.display='none';
         isCheckingOut=false; const cb=$('#checkoutBtn'); if(cb) cb.disabled=false;
+        await refreshInventory();
       }
     }catch(err){
       console.warn('[poll] getOrder error:', err.message);
@@ -451,9 +465,7 @@ btn=$('#confirmPaid'); if(btn) btn.addEventListener('click', async ()=>{
 btn=$('#cancelOrder'); if(btn) btn.addEventListener('click', async ()=>{
   if(!lastOrderId) return;
   await cancelOrder(lastOrderId);
-  const o=ordersLocal.find(x=>x.id===lastOrderId);
   upsertLocalOrder({ id:lastOrderId, status:'cancelled' });
-  if(o && o.items?.length){ for(const it of o.items){ const p=PRODUCTS.find(x=>x.id===it.id); if(p && isFinite(p.stock)) p.stock+=it.qty; } renderProducts(); renderCart(); }
   if(pollMap.has(lastOrderId)){ clearInterval(pollMap.get(lastOrderId)); pollMap.delete(lastOrderId); }
   clearInterval(ttlTimer);
   const pm=$('#payMask'); if(pm) pm.style.display='none';
@@ -462,7 +474,7 @@ btn=$('#cancelOrder'); if(btn) btn.addEventListener('click', async ()=>{
 });
 btn=$('#closePay'); if(btn) btn.addEventListener('click', ()=>{ const pm=$('#payMask'); if(pm) pm.style.display='none'; isCheckingOut=false; const cb=$('#checkoutBtn'); if(cb) cb.disabled=false; });
 
-// CHECKOUT
+// CHECKOUT（建單會帶 items，扣庫存由後端處理）
 btn=$('#checkoutBtn'); if(btn) btn.addEventListener('click', ()=>{
   if(isCheckingOut) return;
   if(cart.length===0){ showToast('購物車是空的'); return; }
@@ -472,30 +484,30 @@ btn=$('#checkoutBtn'); if(btn) btn.addEventListener('click', ()=>{
   const orderId='order-'+Date.now();
   const amount=Number(getCartTotal().toFixed(2));
   const asset =selectedAsset;
+  const items = cart.map(it=>({ id:it.id, qty:it.qty })); // ★ 關鍵：帶明細
 
-  createOrder(orderId, asset, amount).then(resp=>{
+  createOrder(orderId, asset, amount, items).then(async resp=>{
     const order = resp.order || { id:orderId, createdAt:Date.now(), expiresAt: Date.now()+15*60*1000, status:'pending' };
     order.expiresAt = toMs(order.expiresAt) ?? (Date.now()+15*60*1000);
 
-    // 本地訂單
+    // 本地訂單（僅紀錄，不再自行改庫存）
     upsertLocalOrder({ id:order.id, asset, amount, status:asStatus(order.status||'pending'),
-      createdAt:order.createdAt, expiresAt:order.expiresAt, items: cart.map(it=>({id:it.id,qty:it.qty})) });
+      createdAt:order.createdAt, expiresAt:order.expiresAt, items });
 
-    // 扣庫存 + 清空購物車
-    for(const it of cart){ const p=PRODUCTS.find(x=>x.id===it.id); if(p && isFinite(p.stock)) p.stock=Math.max(0,p.stock-it.qty); }
-    cart=[]; saveCart(); updateCartBadge(); renderCart(); renderProducts();
+    // 清空購物車 → 由後端已扣庫存；這裡只刷新顯示
+    cart=[]; saveCart(); updateCartBadge(); renderCart();
+    await refreshInventory();
 
     // 顯示付款資訊
     $('#orderIdText')   && ($('#orderIdText').textContent=order.id);
     $('#payAmountText') && ($('#payAmountText').textContent=amount+' '+asset);
     $('#payAddr')       && ($('#payAddr').textContent=RECEIVING_ADDR);
 
-    return renderQR(makeEip681({asset,amount})).then(()=>{
-      const pm=$('#payMask'); if(pm) pm.style.display='grid';
-      startPolling(order.id);
-      startTTLCountdown(toMs(order.expiresAt));
-      updateOrdersBadge(); renderOrdersDrawer();
-    });
+    await renderQR(makeEip681({asset,amount}));
+    const pm=$('#payMask'); if(pm) pm.style.display='grid';
+    startPolling(order.id);
+    startTTLCountdown(toMs(order.expiresAt));
+    updateOrdersBadge(); renderOrdersDrawer();
   }).catch(err=>{
     console.error('create order failed:', err);
     showToast('建單失敗');
@@ -508,16 +520,32 @@ window.__market_boot_ran = window.__market_boot_ran || false;
 window.__market_boot = function(){
   if(window.__market_boot_ran) return;
   window.__market_boot_ran = true;
-  try{
-    loadCart(); renderProducts(); renderCart(); updateCartBadge();
-    loadLocalOrders(); normalizeAllOrders(); updateOrdersBadge(); renderOrdersDrawer();
-    ordersLocal.filter(o=>asStatus(o.status)==='pending').forEach(o=>startPolling(o.id));
-    console.log('[market] boot ok');
-  }catch(err){
-    console.error('[init error]', err); showToast('載入時發生錯誤(F12看console)');
-  }
+  (async () => {
+    try{
+      loadCart();
+      await hydrateProductsFromAPI();           // ★ 從後端載入商品/庫存
+      renderProducts(); renderCart(); updateCartBadge();
+
+      loadLocalOrders(); normalizeAllOrders(); updateOrdersBadge(); renderOrdersDrawer();
+
+      // 把本機 pending 訂單與後端同步一次（拿到正確 expiresAt / status）
+      const pendings = ordersLocal.filter(o=>asStatus(o.status)==='pending');
+      for (const p of pendings) {
+        try{
+          const r = await fetchJSON(`${BACKEND_BASE}/orders/${p.id}`, { method:'GET' });
+          const s = r.order;
+          p.asset=s.asset; p.amount=s.amount; p.status=s.status; p.expiresAt=s.expiresAt; p.txHash=s.txHash||null; p.network=s.network||null;
+          saveLocalOrders();
+          startPolling(p.id);
+          startTTLCountdown(toMs(p.expiresAt));
+        }catch{} // 忽略取單失敗
+      }
+      console.log('[market] boot ok');
+    }catch(err){
+      console.error('[init error]', err); showToast('載入時發生錯誤(F12看console)');
+    }
+  })();
 };
 if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', window.__market_boot, {once:true}); } else { window.__market_boot(); }
 
 console.log('[market] market.js ready');
-
