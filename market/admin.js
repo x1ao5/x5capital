@@ -113,6 +113,7 @@ itemsTbody.onclick = async (e) => {
       // 填入表單
       document.getElementById('formTitle').textContent = '編輯商品';
       document.getElementById('f_id').value = it.id;
+      document.getElementById('f_sku').value = it.sku || it.id || '';
       document.getElementById('f_title').value = it.title || '';
       document.getElementById('f_desc').value = it.description || '';
       document.getElementById('f_category').value = it.category || '';
