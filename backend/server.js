@@ -8,30 +8,36 @@ import { Pool } from 'pg';
 const app  = express();
 const PORT = process.env.PORT || 10000;
 
-// ========== Middleware（Webhook 要 raw body，其他走 JSON） ==========
-app.use((req, res, next) => {
-  res.setHeader('ngrok-skip-browser-warning', 'true');
-  next();
-});
+// ===== Admin Token（有設才啟用，建議設定） =====
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
+function requireAdmin(req, res, next){
+  if (!ADMIN_TOKEN) return next(); // 若沒設，就不做權限檢查
+  const t = req.header('x-admin-token') || req.query.token || '';
+  if (t === ADMIN_TOKEN) return next();
+  return res.status(401).json({ error: 'unauthorized' });
+}
+
+// ===== Middleware（Webhook 要 raw body，其它用 JSON） =====
+app.use((req, res, next) => { res.setHeader('ngrok-skip-browser-warning', 'true'); next(); });
 app.use(cors({ origin: '*' }));
 app.use((req, res, next) => {
-  if (req.path.startsWith('/webhook')) return next(); // 保留 raw body
+  if (req.path.startsWith('/webhook')) return next(); // 讓 webhook 維持 raw
   express.json({ limit: '1mb' })(req, res, next);
 });
 
-// ========== Postgres ==========
+// ===== Postgres =====
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
-async function withTx(fn) {
+async function withTx(fn){
   const c = await pool.connect();
   try { await c.query('BEGIN'); const r = await fn(c); await c.query('COMMIT'); return r; }
-  catch (err) { await c.query('ROLLBACK'); throw err; }
+  catch (e){ await c.query('ROLLBACK'); throw e; }
   finally { c.release(); }
 }
 
-// ========== 常數 ==========
+// ===== Consts =====
 const RECEIVING_ADDR = (process.env.RECEIVING_ADDR || '').toLowerCase();
 const MIN_CONF       = Number(process.env.MIN_CONFIRMATIONS || 0);
 const ORDER_TTL_MIN  = Number(process.env.ORDER_TTL_MIN || 15);
@@ -48,7 +54,7 @@ app.get('/items', async (req, res) => {
   res.json({ items: r.rows });
 });
 
-app.post('/items/upsert', async (req, res, next) => {
+app.post('/items/upsert', requireAdmin, async (req, res, next) => {
   try {
     const { id, title, description = '', category = null, price = 0, stock = 0, img = null, sortOrder = null } = req.body || {};
     if (!id || !title) return res.status(400).json({ error: 'id/title required' });
@@ -69,7 +75,7 @@ app.post('/items/upsert', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-app.post('/items/:id/adjust', async (req, res, next) => {
+app.post('/items/:id/adjust', requireAdmin, async (req, res, next) => {
   try {
     const id    = req.params.id;
     const delta = Number(req.body?.delta || 0);
@@ -82,7 +88,7 @@ app.post('/items/:id/adjust', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-app.post('/items/:id/set-stock', async (req, res, next) => {
+app.post('/items/:id/set-stock', requireAdmin, async (req, res, next) => {
   try {
     const id    = req.params.id;
     const stock = Math.max(0, Number(req.body?.stock || 0));
@@ -114,7 +120,7 @@ app.post('/orders', async (req, res, next) => {
         [id, asset, amount, now, exp]
       );
 
-      // 如果前端有帶購物車明細，這裡會扣庫存＋寫入 order_items
+      // 建單同時扣庫存＋寫 order_items（避免超賣）
       if (Array.isArray(items) && items.length > 0) {
         for (const it of items) {
           const itemId = it.id, qty = Number(it.qty || 0);
@@ -182,107 +188,111 @@ app.post('/orders/:id/cancel', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-app.post('/orders/:id/confirm', async (req, res) => {
-  res.json({ ok: true }); // 真正入帳靠 webhook
+// 掃描逾期訂單並退庫存（建議搭配 Cron Job）
+app.post('/orders/sweep-expired', requireAdmin, async (req, res, next) => {
+  try {
+    const affected = await withTx(async (c) => {
+      const q = await c.query(
+        `SELECT id FROM orders
+         WHERE status='pending' AND NOW() > expires_at
+         FOR UPDATE`
+      );
+      for (const row of q.rows) {
+        const items = await c.query(`SELECT item_id, qty FROM order_items WHERE order_id=$1`, [row.id]);
+        for (const it of items.rows) {
+          await c.query(`UPDATE items SET stock = stock + $2 WHERE id=$1`, [it.item_id, it.qty]);
+        }
+        await c.query(`UPDATE orders SET status='expired', updated_at=NOW() WHERE id=$1`, [row.id]);
+      }
+      return q.rowCount;
+    });
+    res.json({ expired: affected });
+  } catch (e) { next(e); }
 });
 
 // ===================================================================
-// Webhook（Alchemy）
+// Webhook（Alchemy）— 同時嘗試 raw 與除精度兩種解讀
 // ===================================================================
 app.post('/webhook/alchemy', express.raw({ type: 'application/json' }), async (req, res) => {
   try {
-    const raw  = req.body; // Buffer
+    const rawBody  = req.body; // Buffer
     const sig  = req.header('X-Alchemy-Signature') || '';
-    const hmac = crypto.createHmac('sha256', WEBHOOK_SECRET).update(raw).digest('hex');
+    const hmac = crypto.createHmac('sha256', WEBHOOK_SECRET).update(rawBody).digest('hex');
     if (sig !== hmac) { console.log('[HOOK] invalid signature'); return res.status(401).end(); }
 
-    const payload = JSON.parse(raw.toString('utf8'));
+    const payload = JSON.parse(rawBody.toString('utf8'));
     const acts = payload?.event?.activity || [];
 
-for (const a of acts) {
-  const to = (a.toAddress || '').toLowerCase();
-  if (!to || to !== RECEIVING_ADDR) continue;
+    for (const a of acts) {
+      const to = (a.toAddress || '').toLowerCase();
+      if (!to || to !== RECEIVING_ADDR) continue;
 
-  const confs = Number(a?.extraInfo?.confirmations || 0);
-  if (confs < MIN_CONF) continue;
+      const confs = Number(a?.extraInfo?.confirmations || 0);
+      if (confs < MIN_CONF) continue;
 
-  const tokenAddr = (a.rawContract?.address || '').toLowerCase();
-  const isUSDT    = tokenAddr === '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9'; // Arbitrum USDT
-  const isETH     = !tokenAddr || tokenAddr === '0x0000000000000000000000000000000000000000';
+      const tokenAddr = (a.rawContract?.address || '').toLowerCase();
+      const isUSDT    = tokenAddr === '0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9'; // USDT (Arbitrum)
+      const isETH     = !tokenAddr || tokenAddr === '0x0000000000000000000000000000000000000000';
 
-  // ❶ 取得原始 value（Alchemy 可能已是人類單位）
-  const raw = Number(a.value || 0);
+      const raw = Number(a.value || 0);
+      let candidates = [];
+      if (isUSDT) candidates = [raw, raw / 1e6];
+      else if (isETH) candidates = [raw, raw / 1e18];
+      else continue;
 
-  // ❷ 準備候選金額（同時嘗試兩種解讀）
-  // USDT：可能是 1（人類單位）或 1_000_000（原始單位）
-  // ETH ：可能是 0.1（人類單位）或 1e17（原始單位）
-  let candidates = [];
-  if (isUSDT) candidates = [raw, raw / 1e6];
-  else if (isETH) candidates = [raw, raw / 1e18];
-  else continue; // 非 ETH / USDT 直接略過
+      const asset   = isUSDT ? 'USDT' : 'ETH';
+      const txhash  = a.hash;
+      const network = (payload?.event?.network || '').toUpperCase();
 
-  const asset   = isUSDT ? 'USDT' : 'ETH';
-  const txhash  = a.hash;
-  const network = (payload?.event?.network || '').toUpperCase();
+      let updated = false;
+      for (const amt of candidates) {
+        const amountStr = String(amt);
+        updated = await withTx(async (c) => {
+          let q = await c.query(
+            `SELECT id FROM orders
+             WHERE status='pending' AND asset=$1 AND amount::numeric = $2::numeric
+               AND NOW() <= expires_at
+             ORDER BY created_at DESC
+             LIMIT 1 FOR UPDATE`,
+            [asset, amountStr]
+          );
+          if (q.rowCount === 0) {
+            q = await c.query(
+              `SELECT id FROM orders
+               WHERE status='pending' AND asset=$1
+                 AND ROUND(amount::numeric,2) = ROUND($2::numeric,2)
+                 AND NOW() <= expires_at
+               ORDER BY created_at DESC
+               LIMIT 1 FOR UPDATE`,
+              [asset, amountStr]
+            );
+          }
+          if (q.rowCount === 0) {
+            q = await c.query(
+              `SELECT id FROM orders
+               WHERE status='pending' AND asset=$1
+                 AND ABS(amount::numeric - $2::numeric) <= 0.01
+                 AND NOW() <= expires_at
+               ORDER BY created_at DESC
+               LIMIT 1 FOR UPDATE`,
+              [asset, amountStr]
+            );
+          }
+          if (q.rowCount === 0) return false;
 
-  let updated = false;
-  for (const amt of candidates) {
-    const amountStr = String(amt);
-
-    // 三段式對帳：=、四捨五入到 2 位、±0.01 容差
-    updated = await withTx(async (c) => {
-      let q = await c.query(
-        `SELECT id FROM orders
-         WHERE status='pending' AND asset=$1 AND amount::numeric = $2::numeric
-           AND NOW() <= expires_at
-         ORDER BY created_at DESC
-         LIMIT 1 FOR UPDATE`,
-        [asset, amountStr]
-      );
-      if (q.rowCount === 0) {
-        q = await c.query(
-          `SELECT id FROM orders
-           WHERE status='pending' AND asset=$1
-             AND ROUND(amount::numeric,2) = ROUND($2::numeric,2)
-             AND NOW() <= expires_at
-           ORDER BY created_at DESC
-           LIMIT 1 FOR UPDATE`,
-          [asset, amountStr]
-        );
+          const id = q.rows[0].id;
+          await c.query(
+            `UPDATE orders
+               SET status='paid', tx_hash=$2, network=$3, paid_at=NOW(), updated_at=NOW()
+             WHERE id=$1`,
+            [id, txhash, network]
+          );
+          return true;
+        });
+        if (updated) { console.log('✅ HOOK PAID', asset, amountStr, '(raw:', raw, ')', txhash); break; }
       }
-      if (q.rowCount === 0) {
-        q = await c.query(
-          `SELECT id FROM orders
-           WHERE status='pending' AND asset=$1
-             AND ABS(amount::numeric - $2::numeric) <= 0.01
-             AND NOW() <= expires_at
-           ORDER BY created_at DESC
-           LIMIT 1 FOR UPDATE`,
-          [asset, amountStr]
-        );
-      }
-      if (q.rowCount === 0) return false;
-
-      const id = q.rows[0].id;
-      await c.query(
-        `UPDATE orders
-           SET status='paid', tx_hash=$2, network=$3, paid_at=NOW(), updated_at=NOW()
-         WHERE id=$1`,
-        [id, txhash, network]
-      );
-      return true;
-    });
-
-    if (updated) {
-      console.log('✅ HOOK PAID', asset, amountStr, '(raw:', raw, ')', txhash);
-      break; // 有一個候選成功就結束
+      if (!updated) console.log('⚠️ HOOK no match', asset, raw, '(tried:', candidates.join(' | '), ')', txhash);
     }
-  }
-
-  if (!updated) {
-    console.log('⚠️ HOOK no match', asset, raw, '(tried:', candidates.join(' | '), ')', txhash);
-  }
-}
     res.json({ ok: true });
   } catch (err) {
     console.error('HOOK error', err);
@@ -291,7 +301,7 @@ for (const a of acts) {
 });
 
 // ===================================================================
-// Debug / Misc
+// Misc
 // ===================================================================
 app.get('/orders/debug-latest', async (req, res) => {
   const r = await pool.query(
@@ -302,10 +312,6 @@ app.get('/orders/debug-latest', async (req, res) => {
 });
 
 app.get('/', (_, res) => res.send('x5 backend live'));
-app.use((err, req, res, next) => {
-  console.error(err);
-  res.status(500).json({ error: String(err.message || err) });
-});
+app.use((err, req, res, next) => { console.error(err); res.status(500).json({ error: String(err.message || err) }); });
 
 app.listen(PORT, () => console.log('listening on', PORT));
-
