@@ -4,6 +4,19 @@ import 'dotenv/config.js';
 import express from 'express';
 import cors from 'cors';
 import crypto from 'crypto';
+// === PostgreSQL 連線設定（貼在 server.js 的 import 區域）===
+import pkg from 'pg';
+const { Pool } = pkg;
+
+export const db = new Pool({
+  connectionString: process.env.DATABASE_URL,   // .env 裡的 DATABASE_URL
+  ssl: { rejectUnauthorized: false }            // Render Postgres 需開 SSL
+});
+
+// 啟動時測試連線一次（可留可刪）
+db.query('SELECT NOW() AS now')
+  .then(r => console.log('✅ DB ok at', r.rows[0].now))
+  .catch(err => console.error('❌ DB connect error:', err));
 
 const PORT              = process.env.PORT || 10000;
 const RECEIVING_ADDR    = (process.env.RECEIVING_ADDR || '').toLowerCase();
@@ -191,3 +204,4 @@ app.listen(PORT, () => {
   console.log('==> Available at your primary URL after deploy (Render)');
   console.log('////////////////////////////////////////////////////////////');
 });
+
