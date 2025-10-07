@@ -225,6 +225,38 @@ app.post('/orders', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ✅ 放在 /orders/:id 之前
+app.get('/orders/admin', requireAdmin, async (req, res, next) => {
+  try {
+    const { status = null, q = null, limit = 50, offset = 0 } = req.query;
+    const r = await pool.query(
+      `SELECT id, asset, amount, status, tx_hash AS "txHash", network,
+              created_at, updated_at, paid_at, cancelled_at, expires_at AS "expiresAt"
+       FROM orders
+       WHERE ($1::text IS NULL OR status=$1::text)
+         AND ($2::text IS NULL OR id ILIKE '%'||$2::text||'%')
+       ORDER BY created_at DESC
+       LIMIT LEAST($3::int, 200) OFFSET GREATEST($4::int, 0)`,
+      [status, q, Number(limit), Number(offset)]
+    );
+    res.json({ orders: r.rows });
+  } catch (e) { next(e); }
+});
+
+app.get('/orders/:id/items', requireAdmin, async (req, res, next) => {
+  try {
+    const id = req.params.id;
+    const r = await pool.query(
+      `SELECT oi.item_id AS "itemId", oi.qty, i.title, i.price
+         FROM order_items oi
+         LEFT JOIN items i ON i.id = oi.item_id
+        WHERE oi.order_id=$1`,
+      [id]
+    );
+    res.json({ items: r.rows });
+  } catch (e) { next(e); }
+});
+
 app.get('/orders/:id', async (req, res) => {
   const id = req.params.id;
   const r  = await pool.query(
@@ -280,41 +312,6 @@ app.post('/orders/sweep-expired', requireAdmin, async (req, res, next) => {
       return q.rowCount;
     });
     res.json({ expired: affected });
-  } catch (e) { next(e); }
-});
-
-// ==================== Orders：查詢/明細 ====================
-
-// 訂單列表（管理用）：?status=pending|paid|cancelled|expired&q=keyword&limit=50&offset=0
-app.get('/orders/admin', requireAdmin, async (req, res, next) => {
-  try {
-    const { status = null, q = null, limit = 50, offset = 0 } = req.query;
-    const r = await pool.query(
-      `SELECT id, asset, amount, status, tx_hash AS "txHash", network,
-              created_at, updated_at, paid_at, cancelled_at, expires_at AS "expiresAt"
-       FROM orders
-       WHERE ($1::text IS NULL OR status=$1::text)
-         AND ($2::text IS NULL OR id ILIKE '%'||$2::text||'%')
-       ORDER BY created_at DESC
-       LIMIT LEAST($3::int, 200) OFFSET GREATEST($4::int, 0)`,
-      [status, q, Number(limit), Number(offset)]
-    );
-    res.json({ orders: r.rows });
-  } catch (e) { next(e); }
-});
-
-// 訂單明細（items）
-app.get('/orders/:id/items', requireAdmin, async (req, res, next) => {
-  try {
-    const id = req.params.id;
-    const r = await pool.query(
-      `SELECT oi.item_id AS "itemId", oi.qty, i.title, i.price
-       FROM order_items oi
-       LEFT JOIN items i ON i.id = oi.item_id
-       WHERE oi.order_id=$1`,
-      [id]
-    );
-    res.json({ items: r.rows });
   } catch (e) { next(e); }
 });
 
@@ -423,5 +420,6 @@ app.get('/', (_, res) => res.send('x5 backend live'));
 app.use((err, req, res, next) => { console.error(err); res.status(500).json({ error: String(err.message || err) }); });
 
 app.listen(PORT, () => console.log('listening on', PORT));
+
 
 
