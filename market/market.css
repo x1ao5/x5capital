@@ -166,3 +166,14 @@ body{ margin:0; background:var(--x5-bg); color:var(--x5-fg); }
   color: #3b82f6;
   text-decoration: underline;
 }
+
+/* --- Skeleton Loading --- */
+.card.skeleton .thumb{height:160px;background:#111;border-radius:12px;}
+.card.skeleton .line{height:12px;margin-top:10px;background:#111;border-radius:6px;}
+.shimmer{position:relative;overflow:hidden;}
+.shimmer::after{
+  content:'';position:absolute;inset:0;transform:translateX(-100%);
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.06),transparent);
+  animation:sk 1.2s infinite;
+}
+@keyframes sk{to{transform:translateX(100%)}}
