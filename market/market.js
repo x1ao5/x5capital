@@ -31,6 +31,22 @@ function toMs(x) {
   return undefined; // 解析不到就回 undefined（不要亂給現在時間）
 }
 
+// 進頁先畫骨架卡片，等 /items 回來再替換
+function renderProductsSkeleton(n = 8){
+  const grid = document.getElementById('productGrid');
+  if (!grid) return;
+  grid.innerHTML = Array.from({length:n}).map(()=>`
+    <article class="card skeleton">
+      <div class="thumb shimmer"></div>
+      <div class="content">
+        <div class="line shimmer" style="width:70%"></div>
+        <div class="line shimmer" style="width:45%"></div>
+        <div class="line shimmer" style="width:55%"></div>
+      </div>
+    </article>
+  `).join('');
+}
+
 /* ---- 統一的 JSON 取用（加 ngrok 繞過） ---- */
 async function fetchJSON(url, opt={}) {
   const u = new URL(url);
@@ -129,7 +145,7 @@ window.renderProducts = function(){
   grid.innerHTML = data.map(p=>{
     const soldOut = isFinite(p.stock)&&p.stock<=0;
     return `<article class="card" data-id="${p.id}">
-      <div class="thumb"><img src="${p.img}" alt="${p.title}"/></div>
+      <div class="thumb"><img src="${p.img}" loading="lazy" alt="${p.title}"/></div>
       <div class="content">
         <div class="title">${p.title}</div>
         <div class="desc">${p.desc}</div>
@@ -523,9 +539,9 @@ window.__market_boot = function(){
   (async () => {
     try{
       loadCart();
+      renderProductsSkeleton(8);                // ★ 先畫骨架
       await hydrateProductsFromAPI();           // ★ 從後端載入商品/庫存
       renderProducts(); renderCart(); updateCartBadge();
-
       loadLocalOrders(); normalizeAllOrders(); updateOrdersBadge(); renderOrdersDrawer();
 
       // 把本機 pending 訂單與後端同步一次（拿到正確 expiresAt / status）
@@ -549,3 +565,4 @@ window.__market_boot = function(){
 if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', window.__market_boot, {once:true}); } else { window.__market_boot(); }
 
 console.log('[market] market.js ready');
+
