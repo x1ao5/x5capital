@@ -77,9 +77,13 @@ async function hydrateProductsFromAPI(){
     img: it.img || 'https://i.ibb.co/k2H7kfrt/Newx5logo-1.png',
   }));
 }
+
 async function refreshInventory(){
-  try { await hydrateProductsFromAPI(); renderProducts(); }
-  catch(e){ console.warn('[inventory] refresh fail', e); }
+  try {
+    renderProductsSkeleton();      // ← 抓新資料前先上骨架
+    await hydrateProductsFromAPI();
+    renderProducts();
+  } catch (e) { console.warn('[inventory] refresh fail', e); }
 }
 
 /* ====== CART ====== */
@@ -565,4 +569,5 @@ window.__market_boot = function(){
 if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded', window.__market_boot, {once:true}); } else { window.__market_boot(); }
 
 console.log('[market] market.js ready');
+
 
