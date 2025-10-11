@@ -635,16 +635,16 @@
 /* ===================== 基本設定（你可以改） ===================== */
 /** 一次性密碼清單（字串陣列）。部署時你可改由後端 API 檢查。 */
 const VALID_CODES = [
-  "920827", "test1", "test2", "test3"  // ← 自行新增/修改
+  "我幹您娘機掰", "幹您娘機掰", "", ""  // ← 自行新增/修改
 ];
 
 /** 抽獎獎項設定：label=名稱, weight=機率權重, img=中獎彈窗圖片, desc=描述 */
 let PRIZES = [
-  { label: "BTC",   weight: 0,  img: "", desc: "" },
-  { label: "ETH",   weight: 0,  img: "", desc: "" },
-  { label: "SOL",   weight: 0,  img: "", desc: "" },
-  { label: "BNB",   weight: 0,  img: "", desc: "" },
-  { label: "ADA",   weight: 5, img: "https://i.ibb.co/dsxdwW5j/image.jpg",  desc: "生日快樂" }
+  { label: "被我幹",   weight: 1,  img: "", desc: "" },
+  { label: "被我幹",   weight: 1,  img: "", desc: "" },
+  { label: "被我幹",   weight: 1,  img: "", desc: "" },
+  { label: "被我幹",   weight: 1,  img: "", desc: "" },
+  { label: "被我幹",   weight: 1, img: "",  desc: "" }
 ];
 // 小提示：總機率=權重總和，不需要 100；你只要調整 weight 比例即可。
 
@@ -978,6 +978,7 @@ document.getElementById('wheelMask').addEventListener('click', (e)=>{
 
 </body>
 </html>
+
 
 
 
