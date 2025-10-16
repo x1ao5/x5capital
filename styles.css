@@ -383,6 +383,65 @@
   max-height: 200px;
   margin-top: 10px;
 }
+/* phone */
+@media (max-width: 768px) {
+  /* 整條導覽列固定在頂部 + 毛玻璃背景 */
+  .navbar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    padding: 10px 14px;
+    background: rgba(10,10,10,0.75);
+    backdrop-filter: blur(8px);
+    display: block; /* 讓上下兩層好排 */
+  }
+
+  /* 第一層：logo + Login（Login 固定在右上角） */
+  .navbar-left { display: inline-block; }
+  .login-btn {
+    position: absolute;
+    right: 14px;
+    top: 10px;
+    padding: 6px 10px;
+    font-size: 13px;
+    border-radius: 8px;
+  }
+
+  /* 第二層：把 .navbar-right 當「可水平滑動的子選單」用 */
+  .navbar-right {
+    margin-top: 10px;
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    white-space: nowrap;
+    padding-right: 96px;        /* 給右側 Login 預留空間，避免被遮到 */
+    scrollbar-width: none;      /* Firefox 隱藏捲軸 */
+  }
+  .navbar-right::-webkit-scrollbar { display: none; } /* WebKit 隱藏捲軸 */
+
+  /* 子路徑的每個 tab 長得像 chip，可以滑 */
+  .navbar-right a {
+    display: inline-block;
+    font-size: 14px;
+    color: #cfcfcf;
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.04);
+    text-decoration: none;
+  }
+  .navbar-right a.active { color: #fff; border-color: rgba(255,255,255,0.18); }
+
+  .hero { padding: 72px 16px 48px; }
+  .hero-content h1 { font-size: 34px; }
+  .hero-content p { font-size: 16px; }
+
+  /* 你的卡片牆預設 margin-top: 500px; 手機會超空，縮小 */
+  .scroll-wrapper { margin-top: 40px; }
+
+  .trusted-section { margin: 48px auto 72px; }
+  .faq-section { margin: 60px auto; }
+}
 
 /* ============ Gift Button ============這裡是臨時抽獎插件 */
 :root{
@@ -528,4 +587,5 @@
   filter: grayscale(0.2);
 }
 /* 插件結尾 */
+
 
