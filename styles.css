@@ -51,7 +51,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 20px 60px;
+    padding: 10px 55px;
     position: relative;
     z-index: 2;
   }
@@ -587,5 +587,6 @@
   filter: grayscale(0.2);
 }
 /* 插件結尾 */
+
 
 
