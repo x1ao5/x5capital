@@ -1,38 +1,980 @@
-<!doctype html>
-<html lang="zh-Hant">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Airdrop 任務廣場（測試）</title>
-  <!-- React 18 UMD + Babel（僅用於本地測試，不建議正式上線） -->
-  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <!-- Tailwind CDN 版：本地測試用。正式上線請改為你的 Tailwind 編譯輸出 -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <meta name="color-scheme" content="dark" />
-  <style>
-    html,body{height:100%}
-    :root { color-scheme: dark; }
-    select { color-scheme: dark; }
-    select, option {
-    background-color: #0b0b0b; /* ≈ bg-neutral-950 */
-    color: #f1f5f9;            /* ≈ text-slate-100 */
-    border-color: rgba(255,255,255,.1);
-  }
-  </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>x5capital</title>
+  <link rel="icon" href="https://i.ibb.co/q3DYk2jr/Newx5logo.png" />
+  <link rel="stylesheet" href="styles.css" />
 </head>
-<body class="bg-neutral-950 text-neutral-100">
-  <div id="root"></div>
+<body>
 
-  <!-- 你的元件：請把畫布裡的 AirdropHub.jsx 存成同資料夾的 airdrop-hub.jsx，
-       並將第一行的 `export default function AirdropHub()` 改成 `function AirdropHub()` -->
-  <script type="text/babel" data-presets="react" src="./airdrop-hub.jsx"></script>
+  <!-- all -->
+  <div class="wrapper">
 
-  <!-- 啟動 -->
-  <script type="text/babel" data-presets="react">
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<AirdropHub />);
-  </script>
+  <!-- glow -->
+  <div class="glow left-glow"></div>
+  <div class="glow right-glow"></div>
+
+  <!-- Navbar -->
+  <nav class="navbar">
+    <div class="navbar-left">
+      <img src="x5logo.png" width="55" height="55" alt="x5 logo">
+    </div>
+    <div class="navbar-right">
+      <a href="/" class="active">Home</a>
+      <a href="/product">Product</a>
+      <a href="/market">Market</a>
+      <a href="/trade">Trade</a>
+      <a href="/airdrop">Airdrop</a>
+      <a href="/alpha">BinanceAlpha</a>
+      <a href="">Resources</a>
+      <a href="">Docs</a>
+      <a href="">Blog</a>
+      <button class="login-btn">Login</button>
+    </div>
+  </nav>
+
+  <div class="divider"></div>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-content">
+      <h1>x5capital Website</h1>
+      <p>Build the new internet, your mom.</p>
+      <button class="cta-btn">Get Started</button>
+    </div>
+  </section>
+
+  <!-- scroll-wrapper -->
+  <div class="scroll-wrapper">
+    <div class="gradient-fade left"></div>
+    <div class="gradient-fade right"></div>
+
+    <div class="scroll-track">
+      <!-- Start -->    
+      <div class="profile-card">
+        <div class="avatar">
+          <img src="https://i.ibb.co/bgZ0JFHF/KSJCAT.png" alt="avatar" />
+        </div>
+        <div class="profile-info">
+          <div class="profile-header">
+            <p class="name">kiseiju</p>
+            <div class="tag">阿公</div>
+          </div>
+          <div class="social-grid">
+            <a href="https://x.com/kiseiju1119" class="social-button"><img src="https://t1.pixhost.to/thumbs/7520/626314480_x5x-1.png" alt="X Logo" /></a>
+            <a href="" class="social-button"><img src="https://i.ibb.co/Ngj3Sjmv/X5ins.png" alt="Instagram Logo" /></a>
+            <a href="" class="social-button"><img src="https://i.ibb.co/1tjQrCV1/Tiktok-x5.png" alt="TikTok Logo" /></a>
+          </div>
+        </div>
+      </div>
+
+      <div class="profile-card">
+        <div class="avatar">
+          <img src="https://i.ibb.co/r24NDzH7/image.png" alt="avatar" />
+        </div>
+        <div class="profile-info">
+          <div class="profile-header">
+            <p class="name">x5likeyou</p>
+            <div class="tag">CEO</div>
+          </div>
+          <div class="social-grid">
+            <a href="https://x.com/x5likeyou" class="social-button"><img src="https://t1.pixhost.to/thumbs/7520/626314480_x5x-1.png" alt="X Logo" /></a>
+            <a href="" class="social-button"><img src="https://i.ibb.co/Ngj3Sjmv/X5ins.png" alt="Instagram Logo" /></a>
+            <a href="" class="social-button"><img src="https://i.ibb.co/1tjQrCV1/Tiktok-x5.png" alt="TikTok Logo" /></a>
+          </div>
+        </div>
+      </div>
+
+      <div class="profile-card">
+        <div class="avatar">
+          <img src="https://i.ibb.co/Jw6HVpj9/Finchcat.png" alt="avatar" />
+        </div>
+        <div class="profile-info">
+          <div class="profile-header">
+            <p class="name">finch</p>
+            <div class="tag">操逼天尊</div>
+          </div>
+          <div class="social-grid">
+            <a href="" class="social-button"><img src="https://t1.pixhost.to/thumbs/7520/626314480_x5x-1.png" alt="X Logo" /></a>
+            <a href="" class="social-button"><img src="https://i.ibb.co/Ngj3Sjmv/X5ins.png" alt="Instagram Logo" /></a>
+            <a href="" class="social-button"><img src="https://i.ibb.co/1tjQrCV1/Tiktok-x5.png" alt="TikTok Logo" /></a>
+          </div>
+        </div>
+      </div>
+
+      <div class="profile-card">
+        <div class="avatar">
+          <img src="https://i.ibb.co/TMFtn7XT/image.png" alt="avatar" />
+        </div>
+        <div class="profile-info">
+          <div class="profile-header">
+            <p class="name">我還在學習</p>
+            <div class="tag">修仙中</div>
+          </div>
+          <div class="social-grid">
+            <a href="pornhub.com" class="social-button"><img src="https://t1.pixhost.to/thumbs/7520/626314480_x5x-1.png" alt="X Logo" /></a>
+            <a href="pornhub.com" class="social-button"><img src="https://i.ibb.co/Ngj3Sjmv/X5ins.png" alt="Instagram Logo" /></a>
+            <a href="pornhub.com" class="social-button"><img src="https://i.ibb.co/1tjQrCV1/Tiktok-x5.png" alt="TikTok Logo" /></a>
+          </div>
+        </div>
+      </div>
+
+      <div class="profile-card">
+        <div class="avatar">
+          <img src="https://i.ibb.co/MDLvbCyn/Mejicat.png" alt="avatar" />
+        </div>
+        <div class="profile-info">
+          <div class="profile-header">
+            <p class="name">meji</p>
+            <div class="tag">PolyMarket</div>
+          </div>
+          <div class="social-grid">
+            <a href="#" class="social-button"><img src="https://t1.pixhost.to/thumbs/7520/626314480_x5x-1.png" alt="X Logo" /></a>
+            <a href="#" class="social-button"><img src="https://i.ibb.co/Ngj3Sjmv/X5ins.png" alt="Instagram Logo" /></a>
+            <a href="#" class="social-button"><img src="https://i.ibb.co/1tjQrCV1/Tiktok-x5.png" alt="TikTok Logo" /></a>
+          </div>
+        </div>
+      </div>
+
+      <div class="profile-card">
+        <div class="avatar">
+          <img src="https://i.ibb.co/39jhZZjG/Alu.jpg" alt="avatar" />
+        </div>
+        <div class="profile-info">
+          <div class="profile-header">
+            <p class="name">Alu</p>
+            <div class="tag">KOL</div>
+          </div>
+          <div class="social-grid">
+            <a href="https://x.com/alu69420" class="social-button"><img src="https://t1.pixhost.to/thumbs/7520/626314480_x5x-1.png" alt="X Logo" /></a>
+            <a href="#" class="social-button"><img src="https://i.ibb.co/Ngj3Sjmv/X5ins.png" alt="Instagram Logo" /></a>
+            <a href="#" class="social-button"><img src="https://i.ibb.co/1tjQrCV1/Tiktok-x5.png" alt="TikTok Logo" /></a>
+          </div>
+        </div>
+      </div>
+
+      <div class="profile-card">
+        <div class="avatar">
+          <img src="https://i.ibb.co/5xYndpDb/Cheescat2.png" alt="avatar" />
+        </div>
+        <div class="profile-info">
+          <div class="profile-header">
+            <p class="name">王者起司</p>
+            <div class="tag">騎士內閣</div>
+          </div>
+          <div class="social-grid">
+            <a href="#" class="social-button"><img src="https://t1.pixhost.to/thumbs/7520/626314480_x5x-1.png" alt="X Logo" /></a>
+            <a href="#" class="social-button"><img src="https://i.ibb.co/Ngj3Sjmv/X5ins.png" alt="Instagram Logo" /></a>
+            <a href="#" class="social-button"><img src="https://i.ibb.co/1tjQrCV1/Tiktok-x5.png" alt="TikTok Logo" /></a>
+          </div>
+        </div>
+      </div>
+
+      <div class="profile-card">
+        <div class="avatar">
+          <img src="https://i.ibb.co/LVvrmWv/Lingocat.png" alt="avatar" />
+        </div>
+        <div class="profile-info">
+          <div class="profile-header">
+            <p class="name">Wingo</p>
+            <div class="tag">Crypto/fps</div>
+          </div>
+          <div class="social-grid">
+            <a href="#" class="social-button"><img src="https://t1.pixhost.to/thumbs/7520/626314480_x5x-1.png" alt="X Logo" /></a>
+            <a href="#" class="social-button"><img src="https://i.ibb.co/Ngj3Sjmv/X5ins.png" alt="Instagram Logo" /></a>
+            <a href="#" class="social-button"><img src="https://i.ibb.co/1tjQrCV1/Tiktok-x5.png" alt="TikTok Logo" /></a>
+          </div>
+        </div>
+      </div>
+
+      <div class="profile-card">
+        <div class="avatar">
+          <img src="https://i.ibb.co/Gvj6XkJP/Whisker.jpg" alt="avatar" />
+        </div>
+        <div class="profile-info">
+          <div class="profile-header">
+            <p class="name">WHISKER</p>
+            <div class="tag">先信资本/fps</div>
+          </div>
+          <div class="social-grid">
+            <a href="https://x.com/whisker2828" class="social-button"><img src="https://t1.pixhost.to/thumbs/7520/626314480_x5x-1.png" alt="X Logo" /></a>
+            <a href="#" class="social-button"><img src="https://i.ibb.co/Ngj3Sjmv/X5ins.png" alt="Instagram Logo" /></a>
+            <a href="#" class="social-button"><img src="https://i.ibb.co/1tjQrCV1/Tiktok-x5.png" alt="TikTok Logo" /></a>
+          </div>
+        </div>
+      </div>
+
+      <div class="profile-card">
+        <div class="avatar">
+          <img src="https://i.ibb.co/F4p906tM/Hiroshi.jpg" alt="avatar" />
+        </div>
+        <div class="profile-info">
+          <div class="profile-header">
+            <p class="name">Hiroshi</p>
+            <div class="tag">GameFi</div>
+          </div>
+          <div class="social-grid">
+            <a href="https://x.com/visual0125" class="social-button"><img src="https://t1.pixhost.to/thumbs/7520/626314480_x5x-1.png" alt="X Logo" /></a>
+            <a href="#" class="social-button"><img src="https://i.ibb.co/Ngj3Sjmv/X5ins.png" alt="Instagram Logo" /></a>
+            <a href="#" class="social-button"><img src="https://i.ibb.co/1tjQrCV1/Tiktok-x5.png" alt="TikTok Logo" /></a>
+          </div>
+        </div>
+      </div>
+
+      <div class="profile-card">
+        <div class="avatar">
+          <img src="https://i.ibb.co/nNXK7j9r/HSIEH.jpg" alt="avatar" />
+        </div>
+        <div class="profile-info">
+          <div class="profile-header">
+            <p class="name">HSIEH</p>
+            <div class="tag">工讀生</div>
+          </div>
+          <div class="social-grid">
+            <a href="#" class="social-button"><img src="https://t1.pixhost.to/thumbs/7520/626314480_x5x-1.png" alt="X Logo" /></a>
+            <a href="#" class="social-button"><img src="https://i.ibb.co/Ngj3Sjmv/X5ins.png" alt="Instagram Logo" /></a>
+            <a href="#" class="social-button"><img src="https://i.ibb.co/1tjQrCV1/Tiktok-x5.png" alt="TikTok Logo" /></a>
+          </div>
+        </div>
+      </div>
+
+      <div class="profile-card">
+        <div class="avatar">
+          <img src="https://i.ibb.co/DncjDsr/Callin.jpg" alt="avatar" />
+        </div>
+        <div class="profile-info">
+          <div class="profile-header">
+            <p class="name">Callin</p>
+            <div class="tag">冒險島第一把交椅</div>
+          </div>
+          <div class="social-grid">
+            <a href="https://x.com/Callin_NFT" class="social-button"><img src="https://t1.pixhost.to/thumbs/7520/626314480_x5x-1.png" alt="X Logo" /></a>
+            <a href="#" class="social-button"><img src="https://i.ibb.co/Ngj3Sjmv/X5ins.png" alt="Instagram Logo" /></a>
+            <a href="#" class="social-button"><img src="https://i.ibb.co/1tjQrCV1/Tiktok-x5.png" alt="TikTok Logo" /></a>
+          </div>
+        </div>
+      </div>
+
+      <div class="profile-card">
+        <div class="avatar">
+          <img src="https://i.ibb.co/tTm4Dtmf/Cuuuu.png" alt="avatar" />
+        </div>
+        <div class="profile-info">
+          <div class="profile-header">
+            <p class="name">幕後推手</p>
+            <div class="tag">美女1</div>
+          </div>
+          <div class="social-grid">
+            <a href="#" class="social-button"><img src="https://t1.pixhost.to/thumbs/7520/626314480_x5x-1.png" alt="X Logo" /></a>
+            <a href="#" class="social-button"><img src="https://i.ibb.co/Ngj3Sjmv/X5ins.png" alt="Instagram Logo" /></a>
+            <a href="#" class="social-button"><img src="https://i.ibb.co/1tjQrCV1/Tiktok-x5.png" alt="TikTok Logo" /></a>
+          </div>
+        </div>
+      </div>
+
+      <div class="profile-card">
+        <div class="avatar">
+          <img src="https://i.ibb.co/rRFNjbwr/Girl.jpg" alt="avatar" />
+        </div>
+        <div class="profile-info">
+          <div class="profile-header">
+            <p class="name">幕後推手2</p>
+            <div class="tag">美女2</div>
+          </div>
+          <div class="social-grid">
+            <a href="#" class="social-button"><img src="https://t1.pixhost.to/thumbs/7520/626314480_x5x-1.png" alt="X Logo" /></a>
+            <a href="#" class="social-button"><img src="https://i.ibb.co/Ngj3Sjmv/X5ins.png" alt="Instagram Logo" /></a>
+            <a href="#" class="social-button"><img src="https://i.ibb.co/1tjQrCV1/Tiktok-x5.png" alt="TikTok Logo" /></a>
+          </div>
+        </div>
+      </div>
+
+      <div class="profile-card">
+        <div class="avatar">
+          <img src="https://i.ibb.co/svnf5hfw/112.png" alt="avatar" />
+        </div>
+        <div class="profile-info">
+          <div class="profile-header">
+            <p class="name">阿嬤</p>
+            <div class="tag">美女3</div>
+          </div>
+          <div class="social-grid">
+            <a href="#" class="social-button"><img src="https://t1.pixhost.to/thumbs/7520/626314480_x5x-1.png" alt="X Logo" /></a>
+            <a href="#" class="social-button"><img src="https://i.ibb.co/Ngj3Sjmv/X5ins.png" alt="Instagram Logo" /></a>
+            <a href="#" class="social-button"><img src="https://i.ibb.co/1tjQrCV1/Tiktok-x5.png" alt="TikTok Logo" /></a>
+          </div>
+        </div>
+      </div>
+
+      <div class="profile-card">
+        <div class="avatar">
+          <img src="https://i.ibb.co/BVy6cqsr/Kuma.png" alt="avatar" />
+        </div>
+        <div class="profile-info">
+          <div class="profile-header">
+            <p class="name">Kuma</p>
+            <div class="tag">戰術教練</div>
+          </div>
+          <div class="social-grid">
+            <a href="#" class="social-button"><img src="https://t1.pixhost.to/thumbs/7520/626314480_x5x-1.png" alt="X Logo" /></a>
+            <a href="#" class="social-button"><img src="https://i.ibb.co/Ngj3Sjmv/X5ins.png" alt="Instagram Logo" /></a>
+            <a href="#" class="social-button"><img src="https://i.ibb.co/1tjQrCV1/Tiktok-x5.png" alt="TikTok Logo" /></a>
+          </div>
+        </div>
+      </div>
+
+      <div class="profile-card">
+        <div class="avatar">
+          <img src="https://i.ibb.co/Lhh2S2fF/Karrigan.png" alt="avatar" />
+        </div>
+        <div class="profile-info">
+          <div class="profile-header">
+            <p class="name">karrigan</p>
+            <div class="tag">CS2</div>
+          </div>
+          <div class="social-grid">
+            <a href="https://x.com/karriganCSGO" class="social-button"><img src="https://t1.pixhost.to/thumbs/7520/626314480_x5x-1.png" alt="X Logo" /></a>
+            <a href="" class="social-button"><img src="https://i.ibb.co/Ngj3Sjmv/X5ins.png" alt="Instagram Logo" /></a>
+            <a href="" class="social-button"><img src="https://i.ibb.co/1tjQrCV1/Tiktok-x5.png" alt="TikTok Logo" /></a>
+          </div>
+        </div>
+      </div>
+    
+      <div class="profile-card">
+        <div class="avatar">
+          <img src="https://i.ibb.co/4wJ0DJZN/Kyousuke.png" alt="avatar" />
+        </div>
+        <div class="profile-info">
+          <div class="profile-header">
+            <p class="name">kyousuke</p>
+            <div class="tag">CS2</div>
+          </div>
+          <div class="social-grid">
+            <a href="https://x.com/FLCkyousuke" class="social-button"><img src="https://t1.pixhost.to/thumbs/7520/626314480_x5x-1.png" alt="X Logo" /></a>
+            <a href="" class="social-button"><img src="https://i.ibb.co/Ngj3Sjmv/X5ins.png" alt="Instagram Logo" /></a>
+            <a href="" class="social-button"><img src="https://i.ibb.co/1tjQrCV1/Tiktok-x5.png" alt="TikTok Logo" /></a>
+          </div>
+        </div>
+      </div>
+      
+      <div class="profile-card">
+        <div class="avatar">
+          <img src="https://i.ibb.co/bMZRnh8p/M0nesy.png" alt="avatar" />
+        </div>
+        <div class="profile-info">
+          <div class="profile-header">
+            <p class="name">m0NESY</p>
+            <div class="tag">CS2</div>
+          </div>
+          <div class="social-grid">
+            <a href="https://x.com/FLCm0NESY" class="social-button"><img src="https://t1.pixhost.to/thumbs/7520/626314480_x5x-1.png" alt="X Logo" /></a>
+            <a href="" class="social-button"><img src="https://i.ibb.co/Ngj3Sjmv/X5ins.png" alt="Instagram Logo" /></a>
+            <a href="" class="social-button"><img src="https://i.ibb.co/1tjQrCV1/Tiktok-x5.png" alt="TikTok Logo" /></a>
+          </div>
+        </div>
+      </div>
+      
+      <div class="profile-card">
+        <div class="avatar">
+          <img src="https://i.ibb.co/dsBs7zb4/Donk.png" alt="avatar" />
+        </div>
+        <div class="profile-info">
+          <div class="profile-header">
+            <p class="name">donk</p>
+            <div class="tag">CS2</div>
+          </div>
+          <div class="social-grid">
+            <a href="https://x.com/donk1337" class="social-button"><img src="https://t1.pixhost.to/thumbs/7520/626314480_x5x-1.png" alt="X Logo" /></a>
+            <a href="" class="social-button"><img src="https://i.ibb.co/Ngj3Sjmv/X5ins.png" alt="Instagram Logo" /></a>
+            <a href="" class="social-button"><img src="https://i.ibb.co/1tjQrCV1/Tiktok-x5.png" alt="TikTok Logo" /></a>
+          </div>
+        </div>
+      </div>
+      
+      <div class="profile-card">
+        <div class="avatar">
+          <img src="https://i.ibb.co/FL46Y5z4/Frozen.png" alt="avatar" />
+        </div>
+        <div class="profile-info">
+          <div class="profile-header">
+            <p class="name">frozen</p>
+            <div class="tag">CS2</div>
+          </div>
+          <div class="social-grid">
+            <a href="https://x.com/FROZENNcs" class="social-button"><img src="https://t1.pixhost.to/thumbs/7520/626314480_x5x-1.png" alt="X Logo" /></a>
+            <a href="" class="social-button"><img src="https://i.ibb.co/Ngj3Sjmv/X5ins.png" alt="Instagram Logo" /></a>
+            <a href="" class="social-button"><img src="https://i.ibb.co/1tjQrCV1/Tiktok-x5.png" alt="TikTok Logo" /></a>
+          </div>
+        </div>
+      </div>
+  
+    </div>
+  </div>
+  <!-- scroll-wrapper js -->
+<script>
+  const scrollWrapper = document.querySelector('.scroll-wrapper');
+  const scrollTrack = document.querySelector('.scroll-track');
+
+  // copy scroll
+  scrollTrack.innerHTML += scrollTrack.innerHTML;
+
+  // scroll parameter
+  let scrollAmount = scrollTrack.scrollWidth / 2;
+  let currentScroll = 0;
+  let isPaused = false;
+
+  // auto
+  function animateScroll() {
+    if (!isPaused) {
+      currentScroll += 0.3; // speed
+      if (currentScroll >= scrollAmount) {
+        currentScroll = 0;
+      }
+      scrollTrack.style.transform = `translateX(-${currentScroll}px)`;
+    }
+    requestAnimationFrame(animateScroll);
+  }
+
+  // mouseenter
+  scrollWrapper.addEventListener('mouseenter', () => {
+    isPaused = true;
+  });
+
+  scrollWrapper.addEventListener('mouseleave', () => {
+    isPaused = false;
+  });
+
+  animateScroll();
+</script>
+
+  <div class="divider"></div>
+
+  <!-- Trusted -->
+  <section class="trusted-section">
+    <h3 class="trusted-title">None of the following companies invested</h3>
+    <div class="trusted-logos">
+      <img src="https://i.ibb.co/MkY9zB3Z/Coinbase.png" alt="Coinbase" loading="lazy" />
+      <img src="https://i.ibb.co/k2xrkgvB/Binance.png" alt="Binance" loading="lazy" />
+      <img src="https://i.ibb.co/xSmZ6smT/polychaincapital.png" alt="polychaincapital" loading="lazy" />
+      <img src="https://i.ibb.co/4Z61fPB0/dcg.png" alt="dcg" loading="lazy" />
+      <img src="https://i.ibb.co/1f4TYT6b/venice.png" alt="Venice" loading="lazy" />
+    </div>
+    <div class="divider-line bottom-line"></div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="faq-section">
+    <h2 class="faq-title">Frequently Asked Questions</h2>
+  
+    <div class="faq-item">
+      <input type="checkbox" id="faq1">
+      <label for="faq1" class="faq-question">什麼是 Web3？</label>
+      <div class="faq-answer">騙子一堆。</div>
+    </div>
+  
+    <div class="faq-item">
+      <input type="checkbox" id="faq2">
+      <label for="faq2" class="faq-question">你們支援哪些錢包？</label>
+      <div class="faq-answer">支援你媽。</div>
+    </div>
+  
+    <div class="faq-item">
+      <input type="checkbox" id="faq3">
+      <label for="faq3" class="faq-question">這網站是用什麼技術做的？</label>
+      <div class="faq-answer">小寶純手打。</div>
+    </div>
+
+    <div class="faq-item">
+        <input type="checkbox" id="faq4">
+        <label for="faq4" class="faq-question">如何加入?</label>
+        <div class="faq-answer">董事會還在制定規則。</div>
+      </div>
+
+    <div class="faq-item">
+        <input type="checkbox" id="faq5">
+        <label for="faq5" class="faq-question">bot?</label>
+        <div class="faq-answer">Bot幫我買了8000sol。我買你機掰啦幹您娘</div>
+      </div>  
+
+    <div class="faq-item">
+        <input type="checkbox" id="faq6">
+        <label for="faq6" class="faq-question">虎鞭?</label>
+        <div class="faq-answer">美肌我的虎鞭呢。</div>
+      </div>
+      
+    <div class="faq-item">
+        <input type="checkbox" id="faq7">
+        <label for="faq7" class="faq-question">戰旗?</label>
+        <div class="faq-answer">現在打就是要戰績好看的，就是他們在說的吃假分，我開服482名，版本號不一樣(百場卡鑽代打大師)。</div>
+      </div>
+      
+    <div class="faq-item">
+        <input type="checkbox" id="faq8">
+        <label for="faq8" class="faq-question">腦子?</label>
+        <div class="faq-answer">欸欸 腦子嗡嗡的。</div>
+      </div>
+      
+    <div class="faq-item">
+        <input type="checkbox" id="faq9">
+        <label for="faq9" class="faq-question">牛子?</label>
+        <div class="faq-answer">牛子酸酸的。</div>
+      </div>
+      
+    <div class="faq-item">
+        <input type="checkbox" id="faq10">
+        <label for="faq10" class="faq-question">腰子?</label>
+        <div class="faq-answer">欸 腰子栓栓的怎麼辦(幫朋友問的不是我)。</div>
+      </div>
+      
+    <div class="faq-item">
+        <input type="checkbox" id="faq11">
+        <label for="faq11" class="faq-question">手冊?</label>
+        <div class="faq-answer">我畫面左下角看不到。</div>
+      </div>
+
+    <div class="faq-item">
+        <input type="checkbox" id="faq12">
+        <label for="faq12" class="faq-question">Flash?</label>
+        <div class="faq-answer">我打閃你出去送（準心瞄地板）。</div>
+      </div>
+
+    <div class="faq-item">
+        <input type="checkbox" id="faq13">
+        <label for="faq13" class="faq-question">Trump?</label>
+        <div class="faq-answer">bot應該有幫我買。Trump又賺了20k。</div>
+      </div>
+
+    <div class="faq-item">
+        <input type="checkbox" id="faq14">
+        <label for="faq14" class="faq-question">Sui?</label>
+        <div class="faq-answer">台灣垃圾項目空死它。</div>
+      </div>
+
+    <div class="faq-item">
+        <input type="checkbox" id="faq15">
+        <label for="faq15" class="faq-question">ARAM?</label>
+        <div class="faq-answer">你說他為什麼不去玩坦克呢。</div>
+      </div>
+
+    <div class="faq-item">
+        <input type="checkbox" id="faq16">
+        <label for="faq16" class="faq-question">300u?</label>
+        <div class="faq-answer">坦克邀了幾個bot因此獲得了300u。你說這個機會如果給到lotion呢?</div>
+      </div>
+
+    <div class="faq-item">
+        <input type="checkbox" id="faq17">
+        <label for="faq17" class="faq-question">MaplestoryN?</label>
+        <div class="faq-answer">很難想像一個群主(冰雷被鎖)在冒險島最輝煌的時刻叫大家別玩MSU去玩POE2(雖然poe2很好玩)，像這樣阻止群友發財的群主哪裡找?我請問呢</div>
+      </div>
+  </section> 
+
+  <!-- all -->
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    © 2025 X5 Capital. All rights reserved.
+  </footer>
+
+  <!-- ===== Gift Button & Modals & Wheel臨時抽獎插件===== -->
+<div id="giftBtn" class="gift-btn" title="點我領禮物"></div>
+<div id="giftHint" class="gift-hint">按住 <b>Shift</b> 拖曳可調位置</div>
+
+<!-- 密碼輸入 Modal -->
+<div id="pwdMask" class="modal-mask" role="dialog" aria-modal="true">
+  <div class="modal">
+    <h3>輸入禮物密碼</h3>
+    <p>每組密碼僅能使用一次（刷新也不能重複操機掰）。</p>
+    <div class="row">
+      <input id="pwdInput" type="password" placeholder="輸入密碼" />
+      <button id="pwdSubmit">解鎖</button>
+    </div>
+    <div class="row" style="margin-top:8px; justify-content:flex-end;">
+      <button id="pwdCancel">取消</button>
+    </div>
+    <p id="pwdMsg" style="color:#ff8080; min-height:18px;"></p>
+  </div>
+</div>
+
+<!-- 抽獎輪盤區 -->
+<section id="wheelWrap" class="wheel-wrap">
+  <div style="position:relative">
+    <canvas id="wheelCanvas" class="wheel-canvas"></canvas>
+    <div class="wheel-pointer"></div>
+  </div>
+  <button id="spinBtn" class="spin-btn">開始抽獎</button>
+</section>
+
+<!-- 中獎彈窗 Modal -->
+<div id="winMask" class="modal-mask" role="dialog" aria-modal="true">
+  <div class="modal win-popup">
+    <h3 id="winTitle">恭喜中獎！</h3>
+    <img id="winImg" src="" alt="prize"/>
+    <p id="winDesc"></p>
+    <div class="row" style="justify-content:center;margin-top:10px;">
+      <button id="winOk">關閉</button>
+    </div>
+  </div>
+</div>
+
+<!-- 抽獎輪盤 Modal（新增） -->
+<div id="wheelMask" class="modal-mask wheel-modal" role="dialog" aria-modal="true">
+  <div class="modal">
+    <div id="wheelModalBody"></div>
+    <div class="row" style="justify-content:center;margin-top:10px;">
+      <button id="wheelClose">關閉</button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+/* ===================== 基本設定（你可以改） ===================== */
+/** 一次性密碼清單（字串陣列）。部署時你可改由後端 API 檢查。 */
+const VALID_CODES = [
+  "我幹您娘機掰", "幹您娘機掰", "", ""  // ← 自行新增/修改
+];
+
+/** 抽獎獎項設定：label=名稱, weight=機率權重, img=中獎彈窗圖片, desc=描述 */
+let PRIZES = [
+  { label: "被我幹",   weight: 1,  img: "", desc: "" },
+  { label: "被我幹",   weight: 1,  img: "", desc: "" },
+  { label: "被我幹",   weight: 1,  img: "", desc: "" },
+  { label: "被我幹",   weight: 1,  img: "", desc: "" },
+  { label: "被我幹",   weight: 1, img: "",  desc: "" }
+];
+// 小提示：總機率=權重總和，不需要 100；你只要調整 weight 比例即可。
+
+/* ===================== 一次性密碼（本地持久化） ===================== */
+/** 用 localStorage 記錄已使用密碼；刷新後仍不可再用 */
+const USED_KEY = "gift_used_codes_v1";
+function getUsedSet(){
+  try{ return new Set(JSON.parse(localStorage.getItem(USED_KEY) || "[]")); }
+  catch{ return new Set(); }
+}
+function saveUsedSet(set){
+  localStorage.setItem(USED_KEY, JSON.stringify(Array.from(set)));
+}
+
+/* ===================== Gift 按鈕 & 可拖曳位置 ===================== */
+const giftBtn = document.getElementById("giftBtn");
+const giftHint = document.getElementById("giftHint");
+
+// 位置儲存
+const POS_KEY = "gift_pos_v1";
+(function restorePos(){
+  try{
+    const pos = JSON.parse(localStorage.getItem(POS_KEY) || "{}");
+    if(pos.top && pos.left){
+      document.documentElement.style.setProperty('--gift-top', pos.top);
+      document.documentElement.style.setProperty('--gift-left', pos.left);
+    }
+  }catch{}
+})();
+
+// Shift + 拖曳移動並存檔
+let dragging = false, offset = {x:0,y:0};
+giftBtn.addEventListener("mousedown", (e)=>{
+  if(!e.shiftKey) return;
+  dragging = true;
+  giftBtn.classList.add("editing");
+  const rect = giftBtn.getBoundingClientRect();
+  offset.x = e.clientX - rect.left;
+  offset.y = e.clientY - rect.top;
+});
+window.addEventListener("mousemove", (e)=>{
+  if(!dragging) return;
+  const x = e.clientX - offset.x;
+  const y = e.clientY - offset.y;
+  // 限制在視窗內
+  const maxX = window.innerWidth - 64;
+  const maxY = window.innerHeight - 64;
+  const left = Math.max(0, Math.min(x, maxX));
+  const top = Math.max(0, Math.min(y, maxY));
+  const topPx = top + "px";
+  const leftPx = left + "px";
+  document.documentElement.style.setProperty('--gift-top', topPx);
+  document.documentElement.style.setProperty('--gift-left', leftPx);
+});
+window.addEventListener("mouseup", ()=>{
+  if(!dragging) return;
+  dragging = false;
+  giftBtn.classList.remove("editing");
+  const top = getComputedStyle(document.documentElement).getPropertyValue('--gift-top').trim();
+  const left = getComputedStyle(document.documentElement).getPropertyValue('--gift-left').trim();
+  localStorage.setItem(POS_KEY, JSON.stringify({ top, left }));
+});
+
+giftBtn.addEventListener("click", (e)=>{
+  if(e.shiftKey) return; // 編輯時不開啟
+  openPwdModal();
+});
+
+/* ===================== 密碼 Modal ===================== */
+const pwdMask = document.getElementById("pwdMask");
+const pwdInput = document.getElementById("pwdInput");
+const pwdSubmit = document.getElementById("pwdSubmit");
+const pwdCancel = document.getElementById("pwdCancel");
+const pwdMsg = document.getElementById("pwdMsg");
+
+function openPwdModal(){
+  pwdMask.style.display = "flex";
+  pwdInput.value = "";
+  pwdMsg.textContent = "";
+  setTimeout(()=>pwdInput.focus(), 0);
+}
+function closePwdModal(){ pwdMask.style.display = "none"; }
+
+pwdCancel.addEventListener("click", closePwdModal);
+pwdMask.addEventListener("click", (e)=>{ if(e.target === pwdMask) closePwdModal(); });
+
+pwdSubmit.addEventListener("click", handlePwd);
+pwdInput.addEventListener("keydown", (e)=>{ if(e.key === "Enter") handlePwd(); });
+
+function handlePwd(){
+  const code = (pwdInput.value || "").trim();
+  if(!code){ pwdMsg.textContent = "請輸入密碼"; return; }
+
+  const used = getUsedSet();
+  if(used.has(code)){
+    pwdMsg.textContent = "這組密碼已經使用過了。";
+    return;
+  }
+  if(!VALID_CODES.includes(code)){
+    pwdMsg.textContent = "密碼錯誤或不存在。";
+    return;
+  }
+
+  used.add(code);
+  saveUsedSet(used);
+  closePwdModal();
+  revealWheel();
+}
+
+/* ===================== 輪盤繪製 & 抽獎邏輯 ===================== */
+const wheelWrap = document.getElementById("wheelWrap");
+const wheelCanvas = document.getElementById("wheelCanvas");
+let spinBtn = document.getElementById("spinBtn");
+const ctx = wheelCanvas.getContext("2d");
+
+let currentAngle = 0;
+let spinning = false;
+let drawLocked = false;
+let rafId = null; // 記錄目前的動畫 id
+
+const deg  = d => d * Math.PI / 180;
+const rand = (a, b) => a + Math.random() * (b - a);
+
+function revealWheel(){
+  // 1) 取出輪盤 Modal 容器
+  const wheelMask = document.getElementById('wheelMask');
+  const wheelBody = document.getElementById('wheelModalBody');
+
+  // 2) 把原本頁面裡的輪盤區搬進 Modal 內
+  wheelBody.innerHTML = '';
+  wheelBody.appendChild(wheelWrap);
+
+  // 3) 顯示輪盤並打開 Modal
+  wheelWrap.style.display = "block";
+  wheelMask.style.display = "flex";
+
+  // --- 每次解鎖前，先把上一輪的狀態清乾淨 ---
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null; } // 停掉殘留動畫
+  spinning = false;          // 確保不是「半路以為還在轉」
+  drawLocked = false;        // 你已經有 reset，但再保險
+  spinBtn.disabled = false;
+  spinBtn.classList.remove('done');
+  spinBtn.textContent = '開始抽獎';
+
+  // 把角度歸零（或最少 mod 回 0~2π，避免角度越累越大）
+  const twoPI = Math.PI * 2;
+  currentAngle = ((currentAngle % twoPI) + twoPI) % twoPI; // 若你想直接歸零：currentAngle = 0;
+
+
+  // 🔁 重置一次性抽獎狀態（新的密碼＝新的機會）
+  drawLocked = false;
+  spinBtn.disabled = false;
+  spinBtn.classList.remove('done');
+  spinBtn.textContent = '開始抽獎';
+
+  // 4) 畫布調整
+  resizeCanvas();
+  drawWheel();
+}
+
+function resizeCanvas(){
+  const size = Math.min(520, Math.min(window.innerWidth*0.92, window.innerHeight*0.8));
+  wheelCanvas.width = size * devicePixelRatio;
+  wheelCanvas.height = size * devicePixelRatio;
+  wheelCanvas.style.width = size + "px";
+  wheelCanvas.style.height = size + "px";
+  ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+}
+window.addEventListener("resize", ()=>{ if(wheelWrap.style.display==="block"){ resizeCanvas(); drawWheel(); }});
+
+function drawWheel(){
+  const W = wheelCanvas.width / devicePixelRatio;
+  const H = wheelCanvas.height / devicePixelRatio;
+  const cx = W/2, cy = H/2;
+  const margin = 18;
+  const r = Math.min(W,H)/2 - margin;
+  const n = PRIZES.length;
+  const twoPI = Math.PI * 2;
+  const slice = twoPI / n;
+
+  ctx.clearRect(0,0,W,H);
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(currentAngle);
+
+  for (let i = 0; i < n; i++){
+    const start = i * slice;
+    const end   = start + slice;
+
+    // 扇形
+    ctx.beginPath();
+    ctx.moveTo(0,0);
+    ctx.arc(0,0,r, start, end);
+    ctx.closePath();
+    ctx.fillStyle = i % 2 ? "#202020" : "#252525";
+    ctx.fill();
+    ctx.strokeStyle = "#333";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // 文字（中心線）
+    const mid = start + slice/2;
+    ctx.save();
+    ctx.rotate(mid);
+    const labelRadius = r - 48;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#ddd";
+    ctx.font = "16px Segoe UI, system-ui, -apple-system";
+    ctx.fillText(PRIZES[i].label, labelRadius, 0);
+    ctx.restore();
+  }
+
+  // 中心圓
+  ctx.beginPath();
+  ctx.arc(0,0, 46, 0, twoPI);
+  ctx.fillStyle="#111";
+  ctx.fill();
+  ctx.strokeStyle="#3a3a3a";
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function weightedPick(){
+  const items = PRIZES.map((p, i) => ({ i, p, w: Math.max(0, Number(p.weight) || 0) }));
+  const positives = items.filter(x => x.w > 0);
+  if (positives.length === 0) return { prize: items[0].p, index: 0 }; // 全是 0 就回第一個(可改)
+  if (positives.length === 1) return { prize: positives[0].p, index: positives[0].i };
+
+  const total = positives.reduce((s, x) => s + x.w, 0);
+  let r = Math.random() * total;
+  for (const x of positives) {
+    if (r < x.w) return { prize: x.p, index: x.i };
+    r -= x.w;
+  }
+  const last = positives[positives.length - 1];
+  return { prize: last.p, index: last.i };
+}
+
+spinBtn.addEventListener("click", ()=>{
+  if (spinning || drawLocked) return;
+  spinning = true;
+  spinBtn.disabled = true;
+
+  // 只會回傳權重>0 的獎；其他設 0 就不可能被抽到
+  let { prize: targetPrize, index: targetIndex } = weightedPick();
+  if (!targetPrize || !(Number(targetPrize.weight) > 0)) {
+    const fb = PRIZES.findIndex(p => Number(p.weight) > 0);
+    targetIndex = fb !== -1 ? fb : 0;
+    targetPrize = PRIZES[targetIndex];
+  }
+
+  const twoPI = Math.PI * 2;
+  const n     = PRIZES.length;
+  const slice = twoPI / n;
+
+  // 指針固定在 12 點方向
+  const pointerAngle = -Math.PI/2;
+
+  // ✅ 只鎖「中心線」
+  const targetMidAngle = targetIndex * slice + slice/2;
+
+  // 直接算最終位移（多轉 6~8 圈）
+  const start = currentAngle; // 不要做任何標準化
+  const extraTurns = 12 + Math.floor(Math.random()*3);
+  const finalDelta = (pointerAngle - (start + targetMidAngle)) + extraTurns*twoPI;
+
+  const duration = 4500;
+  const t0 = performance.now();
+  const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
+
+  function anim(now){
+    const t = Math.min(1, (now - t0) / duration);
+    currentAngle = start + finalDelta * easeOutCubic(t);
+    drawWheel();
+    if (t < 1) return requestAnimationFrame(anim);
+
+    // 停止：只用事先算好的 finalDelta，不做任何二次校正或抖動
+    spinning = false;
+    currentAngle = start + finalDelta;
+    drawWheel();
+
+    showWin(targetPrize);
+    drawLocked = true;
+    spinBtn.disabled = true;
+    spinBtn.classList.add('done');
+    spinBtn.textContent = '抽獎已完成';
+  }
+  rafId = requestAnimationFrame(anim);
+});
+
+/* ===================== 中獎彈窗 ===================== */
+const winMask = document.getElementById("winMask");
+const winImg = document.getElementById("winImg");
+const winDesc = document.getElementById("winDesc");
+const winTitle = document.getElementById("winTitle");
+const winOk = document.getElementById("winOk");
+
+// 關閉中獎彈窗（保留輪盤）
+winOk.addEventListener("click", () => {
+  winMask.style.display = "none";
+});
+
+// 點彈窗的半透明遮罩，也可以關
+winMask.addEventListener("click", (e) => {
+  if (e.target === winMask) {
+    winMask.style.display = "none";
+  }
+});
+
+function showWin(prize){
+  winTitle.textContent = `恭喜抽中：${prize.label}`;
+  winImg.src = prize.img || "";
+  winDesc.textContent = prize.desc || "";
+  winMask.style.display = "flex";
+}
+
+// 關閉輪盤 Modal
+document.getElementById('wheelClose').addEventListener('click', ()=>{
+  document.getElementById('wheelMask').style.display = 'none';
+});
+
+// 點遮罩也可關閉
+document.getElementById('wheelMask').addEventListener('click', (e)=>{
+  if(e.target.id === 'wheelMask') e.target.style.display = 'none';
+});
+
+</script>
+  <!-- ===== 臨時抽獎插件結尾===== -->
+
 </body>
 </html>
