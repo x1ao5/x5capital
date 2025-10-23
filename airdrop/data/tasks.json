@@ -1,0 +1,85 @@
+{
+  "_meta": { "updatedAt": "2025-10-24T03:00:00.000Z", "version": 1 },
+  "items": [
+    {
+      "id": "t1",
+      "title": "使用幣安邀請註冊",
+      "project": "Referral",
+      "chain": "BNB",
+      "url": "#/referral#binance",
+      "reward_est_usd": 100,
+      "difficulty": 1,
+      "startAt": "2025-10-22T00:00:00.000Z",
+      "endAt": "2025-12-31T23:59:59.000Z",
+      "category": "社交",
+      "platform": "交易所",
+      "risk": "低風險",
+      "rewards": ["Raffle"],
+      "tags": ["Binance","Referral"]
+    },
+    {
+      "id": "t2",
+      "title": "HyperDEX 提供 LP",
+      "project": "HyperDEX",
+      "chain": "ARB",
+      "url": "",
+      "reward_est_usd": 50,
+      "difficulty": 3,
+      "startAt": "2025-10-18T00:00:00.000Z",
+      "endAt": "2025-11-22T01:00:00.000Z",
+      "category": "上鏈互動",
+      "platform": "官方",
+      "risk": "中風險",
+      "rewards": ["Token"],
+      "tags": ["DEX","LP"],
+      "steps": [
+        { "id": "s1", "label": "連接錢包", "type": "wallet" },
+        { "id": "s2", "label": "Swap 2 次", "type": "DEX" },
+        { "id": "s3", "label": "提供 LP", "type": "LP", "link": "https://app.example.com/lp" }
+      ]
+    },
+    {
+      "id": "t3",
+      "title": "波尔图胜平",
+      "project": "Polymarket",
+      "chain": "POLYGON",
+      "url": "https://polymarket.com/event/uel-not1-por1-2025-10-23",
+      "reward_est_usd": 50,
+      "difficulty": 3,
+      "startAt": "2025-10-18T00:00:00.000Z",
+      "endAt": "2025-11-22T01:00:00.000Z",
+      "category": "Sport",
+      "platform": "Polymarket",
+      "risk": "低風險",
+      "rewards": ["Token"],
+      "tags": ["蕉哥專屬","sport"],
+      "steps": [
+        { "id": "s1", "label": "2-0", "type": "POR", "link": "https://polymarket.com/event/uel-not1-por1-2025-10-23" },
+        { "id": "s2", "label": "1-1", "type": "DRAW", "link": "https://polymarket.com/event/uel-not1-por1-2025-10-23" }
+      ]
+    },
+    {
+      "id": "t4",
+      "title": "Follow 官方帳號",
+      "project": "官推",
+      "chain": "X5",
+      "url": "",
+      "reward_est_usd": 0,
+      "difficulty": 1,
+      "startAt": "2025-10-18T00:00:00.000Z",
+      "endAt": "2025-11-22T01:00:00.000Z",
+      "category": "社交",
+      "platform": "官方",
+      "risk": "低風險",
+      "rewards": ["Token"],
+      "tags": ["社交",""],
+      "steps": [
+        { "id": "s1", "label": "", "type": "" },
+        { "id": "s2", "label": "", "type": "" },
+        { "id": "s3", "label": "", "type": "", "link": "" }
+      ]
+    }
+    
+
+  ]
+}
