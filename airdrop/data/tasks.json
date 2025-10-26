@@ -24,67 +24,110 @@
     },
     {
       "id": "t2",
-      "title": "HyperDEX 提供 LP",
-      "project": "HyperDEX",
-      "chain": "ARB",
-      "url": "",
-      "reward_est_usd": 50,
-      "difficulty": 3,
-      "startAt": "2025-10-18T00:00:00.000Z",
-      "endAt": "2025-11-22T01:00:00.000Z",
+      "title": "模板",
+      "project": "任務模板",
+      "chain": "X5",
+      "url": "pornhub.com",
+      "reward_est_usd": 0,
+      "difficulty": 0,
+      "startAt": "2026-10-18T00:00:00.000Z",
+      "endAt": "2026-11-22T01:00:00.000Z",
       "category": "上鏈互動",
       "platform": "官方",
-      "risk": "中風險",
+      "risk": "低風險",
       "rewards": ["Token"],
-      "tags": ["DEX","LP"],
+      "tags": ["模板"],
       "steps": [
-        { "id": "s1", "label": "連接錢包", "type": "wallet" },
-        { "id": "s2", "label": "Swap 2 次", "type": "DEX" },
-        { "id": "s3", "label": "提供 LP", "type": "LP", "link": "https://app.example.com/lp" }
+        { "id": "s1", "label": "", "type": "wallet" },
+        { "id": "s2", "label": "", "type": "DEX" },
+        { "id": "s3", "label": "", "type": "LP", "link": "" }
       ]
     },
     {
       "id": "t3",
-      "title": "波尔图胜平",
+      "title": "蕉哥模板",
       "project": "Polymarket",
       "chain": "POLYGON",
       "url": "https://polymarket.com/event/uel-not1-por1-2025-10-23",
-      "reward_est_usd": 50,
+      "reward_est_usd": 500,
       "difficulty": 3,
-      "startAt": "2025-10-18T00:00:00.000Z",
-      "endAt": "2025-11-22T01:00:00.000Z",
-      "category": "Sport",
+      "startAt": "2025-11-22T00:00:00.000Z",
+      "endAt": "2026-11-22T01:00:00.000Z",
+      "category": "預測市場",
       "platform": "Polymarket",
       "risk": "低風險",
       "rewards": ["Token"],
-      "tags": ["蕉哥專屬","sport"],
+      "tags": ["蕉哥","sport"],
       "steps": [
-        { "id": "s1", "label": "2-0", "type": "POR", "link": "https://polymarket.com/event/uel-not1-por1-2025-10-23" },
-        { "id": "s2", "label": "1-1", "type": "DRAW", "link": "https://polymarket.com/event/uel-not1-por1-2025-10-23" }
+        { "id": "s1", "label": "2-0", "type": "POR", "link": "https://polymarket.com" },
+        { "id": "s2", "label": "1-1", "type": "DRAW", "link": "https://polymarket.com" }
       ]
     },
     {
       "id": "t4",
-      "title": "Follow 官方帳號",
+      "title": "Follow Twitter",
       "project": "官推",
       "chain": "X5",
-      "url": "",
-      "reward_est_usd": 0,
-      "difficulty": 1,
-      "startAt": "2025-10-18T00:00:00.000Z",
-      "endAt": "2025-11-22T01:00:00.000Z",
+      "url": "https://x.com/x5use",
+      "reward_est_usd": 50000,
+      "difficulty": 3,
+      "startAt": "2025-11-22T00:00:00.000Z",
+      "endAt": "2026-1-2T01:00:00.000Z",
       "category": "社交",
       "platform": "官方",
       "risk": "低風險",
-      "rewards": ["Token"],
-      "tags": ["社交",""],
+      "rewards": ["WL"],
+      "tags": ["social","twitter"],
       "steps": [
-        { "id": "s1", "label": "", "type": "" },
-        { "id": "s2", "label": "", "type": "" },
-        { "id": "s3", "label": "", "type": "", "link": "" }
+        { "id": "s1", "label": "媽了個逼的這還要教?", "type": "social", "link": "https://x.com/x5use" },
+        { "id": "s2", "label": "追隨", "type": "social" },
+      ]
+    },
+    {
+      "id": "t5",
+      "title": "$MEGA Public Sale",
+      "project": "Public Sale",
+      "chain": "megaETH",
+      "url": "https://token.megaeth.com/",
+      "reward_est_usd": 500,
+      "difficulty": 3,
+      "startAt": "2026-10-18T00:00:00.000Z",
+      "endAt": "2026-11-22T01:00:00.000Z",
+      "category": "塞蛋",
+      "platform": "官方",
+      "risk": "低風險",
+      "rewards": ["Token"],
+      "tags": ["Public Sale"],
+      "steps": [
+        { "id": "s1", "label": "START", "type": "Public Sale", "link": "https://token.megaeth.com/" },
+        { "id": "s2", "label": "MANAGE ON SONAR", "type": "Public Sale", "link": "" },
+        { "id": "s3", "label": "", "type": "Public Sale", "link": "" }
+      ]
+    },
+    {
+      "id": "t6",
+      "title": "Stable Phase2",
+      "project": "deposit",
+      "chain": "Stable",
+      "url": "https://stable.concrete.xyz/",
+      "reward_est_usd": 999,
+      "difficulty": 0,
+      "startAt": "2026-10-18T00:00:00.000Z",
+      "endAt": "2026-11-22T01:00:00.000Z",
+      "category": "塞蛋",
+      "platform": "官方",
+      "risk": "低風險",
+      "rewards": ["Token"],
+      "tags": ["deposit"],
+      "steps": [
+        { "id": "s1", "label": "", "type": "deposit" },
+        { "id": "s2", "label": "", "type": "deposit" },
+        { "id": "s3", "label": "", "type": "deposit" }
       ]
     }
+
     
   ]
 }
+
 
