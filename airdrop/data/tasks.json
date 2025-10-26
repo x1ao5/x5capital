@@ -15,7 +15,7 @@
       "platform": "交易所",
       "risk": "低風險",
       "rewards": ["Raffle"],
-      "tags": ["Binance","Referral"]
+      "tags": ["Binance","Referral"],
       "steps": [
         { "id": "s1", "label": "點擊前往連結", "type": "交易所", "link": "https://accounts.binance.com/register?ref=103426747" },
         { "id": "s2", "label": "選擇電話號碼or信箱完成註冊", "type": "交易所", "link": "" },
@@ -85,7 +85,6 @@
       ]
     }
     
-
   ]
-
 }
+
