@@ -1,5 +1,5 @@
 {
-  "_meta": { "updatedAt": "2025-10-24T03:00:00.000Z", "version": 1 },
+  "_meta": { "updatedAt": "2025-10-27T03:00:00.000Z", "version": 1 },
   "items": [
     {
       "id": "t1",
@@ -80,7 +80,7 @@
       "tags": ["social","twitter"],
       "steps": [
         { "id": "s1", "label": "媽了個逼的這還要教?", "type": "social", "link": "https://x.com/x5use" },
-        { "id": "s2", "label": "追隨", "type": "social" },
+        { "id": "s2", "label": "追隨", "type": "social" }
       ]
     },
     {
@@ -112,7 +112,7 @@
       "url": "https://stable.concrete.xyz/",
       "reward_est_usd": 999,
       "difficulty": 0,
-      "startAt": "2026-10-18T00:00:00.000Z",
+      "startAt": "2026-11-5T00:00:00.000Z",
       "endAt": "2026-11-22T01:00:00.000Z",
       "category": "塞蛋",
       "platform": "官方",
@@ -126,8 +126,8 @@
       ]
     }
 
-    
   ]
 }
+
 
 
