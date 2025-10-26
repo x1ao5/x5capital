@@ -59,8 +59,8 @@
       "rewards": ["Token"],
       "tags": ["蕉哥","sport"],
       "steps": [
-        { "id": "s1", "label": "2-0", "type": "POR", "link": "https://polymarket.com" },
-        { "id": "s2", "label": "1-1", "type": "DRAW", "link": "https://polymarket.com" }
+        { "id": "s1", "label": "2-0 POR", "type": "POR", "link": "https://polymarket.com" },
+        { "id": "s2", "label": "1-1 DRAW", "type": "DRAW", "link": "https://polymarket.com" }
       ]
     },
     {
@@ -91,7 +91,7 @@
       "url": "https://token.megaeth.com/",
       "reward_est_usd": 500,
       "difficulty": 3,
-      "startAt": "2026-10-18T00:00:00.000Z",
+      "startAt": "2026-10-27T01:00:00.000Z",
       "endAt": "2026-11-22T01:00:00.000Z",
       "category": "塞蛋",
       "platform": "官方",
@@ -100,8 +100,8 @@
       "tags": ["Public Sale"],
       "steps": [
         { "id": "s1", "label": "START", "type": "Public Sale", "link": "https://token.megaeth.com/" },
-        { "id": "s2", "label": "MANAGE ON SONAR", "type": "Public Sale", "link": "" },
-        { "id": "s3", "label": "", "type": "Public Sale", "link": "" }
+        { "id": "s2", "label": "MANAGE ON SONAR KYC", "type": "Public Sale", "link": "" },
+        { "id": "s3", "label": "27號晚上9點處理起來", "type": "Public Sale", "link": "" }
       ]
     },
     {
@@ -128,6 +128,7 @@
 
   ]
 }
+
 
 
 
