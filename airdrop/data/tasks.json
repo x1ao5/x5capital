@@ -3,19 +3,24 @@
   "items": [
     {
       "id": "t1",
-      "title": "使用幣安邀請註冊",
+      "title": "Binance Referral",
       "project": "Referral",
-      "chain": "BNB",
-      "url": "#/referral#binance",
+      "chain": "BSC",
+      "url": "https://accounts.binance.com/register?ref=103426747",
       "reward_est_usd": 100,
       "difficulty": 1,
       "startAt": "2025-10-22T00:00:00.000Z",
       "endAt": "2025-12-31T23:59:59.000Z",
-      "category": "社交",
+      "category": "DEX",
       "platform": "交易所",
       "risk": "低風險",
       "rewards": ["Raffle"],
       "tags": ["Binance","Referral"]
+      "steps": [
+        { "id": "s1", "label": "點擊前往連結", "type": "交易所", "link": "https://accounts.binance.com/register?ref=103426747" },
+        { "id": "s2", "label": "選擇電話號碼or信箱完成註冊", "type": "交易所", "link": "" },
+        { "id": "s3", "label": "完成KYC", "type": "交易所", "link": "" }
+      ]
     },
     {
       "id": "t2",
@@ -82,4 +87,5 @@
     
 
   ]
+
 }
