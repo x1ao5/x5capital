@@ -413,7 +413,7 @@
     <div class="faq-item">
       <input type="checkbox" id="faq3">
       <label for="faq3" class="faq-question">這網站是用什麼技術做的？</label>
-      <div class="faq-answer">小寶純手打。</div>
+      <div class="faq-answer">小寶純手打HTML JS CSS Next TS</div>
     </div>
 
     <div class="faq-item">
@@ -425,7 +425,7 @@
     <div class="faq-item">
         <input type="checkbox" id="faq5">
         <label for="faq5" class="faq-question">bot?</label>
-        <div class="faq-answer">Bot幫我買了8000sol。我買你機掰啦幹您娘</div>
+        <div class="faq-answer">Bot幫我買了8000sol。</div>
       </div>  
 
     <div class="faq-item">
@@ -565,16 +565,16 @@
 /* ===================== 基本設定（你可以改） ===================== */
 /** 一次性密碼清單（字串陣列）。部署時你可改由後端 API 檢查。 */
 const VALID_CODES = [
-  "我幹您娘機掰", "幹您娘機掰", "", ""  // ← 自行新增/修改
+  "", "", "", ""  // ← 自行新增/修改
 ];
 
 /** 抽獎獎項設定：label=名稱, weight=機率權重, img=中獎彈窗圖片, desc=描述 */
 let PRIZES = [
-  { label: "被我幹",   weight: 1,  img: "", desc: "" },
-  { label: "被我幹",   weight: 1,  img: "", desc: "" },
-  { label: "被我幹",   weight: 1,  img: "", desc: "" },
-  { label: "被我幹",   weight: 1,  img: "", desc: "" },
-  { label: "被我幹",   weight: 1, img: "",  desc: "" }
+  { label: "",   weight: 1,  img: "", desc: "" },
+  { label: "",   weight: 1,  img: "", desc: "" },
+  { label: "",   weight: 1,  img: "", desc: "" },
+  { label: "",   weight: 1,  img: "", desc: "" },
+  { label: "",   weight: 1, img: "",  desc: "" }
 ];
 // 小提示：總機率=權重總和，不需要 100；你只要調整 weight 比例即可。
 
@@ -908,6 +908,7 @@ document.getElementById('wheelMask').addEventListener('click', (e)=>{
 
 </body>
 </html>
+
 
 
 
